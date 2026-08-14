@@ -1,0 +1,22 @@
+.hero {
+  display: grid;
+  align-content: center;
+  min-height: calc(100svh - 7rem);
+  padding: clamp(4rem, 10vw, 8rem) 0;
+
+  h1 {
+    max-width: 12ch;
+    margin: 0;
+    font-size: clamp(3rem, 9vw, 7.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.075em;
+  }
+}
+
+.lead {
+  max-width: 42rem;
+  margin: 2rem 0;
+  color: var(--color-muted);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  line-height: 1.7;
+}

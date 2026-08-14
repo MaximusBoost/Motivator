@@ -1,0 +1,119 @@
+@use "tokens";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+  background: var(--color-bg);
+  font-family: "Manrope", system-ui, sans-serif;
+}
+
+body {
+  min-width: 20rem;
+  margin: 0;
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at 80% 10%, rgb(184 243 74 / 10%), transparent 28rem),
+    var(--color-bg);
+}
+
+a {
+  color: inherit;
+}
+
+.app-shell {
+  width: min(calc(100% - 2rem), var(--content-width));
+  margin-inline: auto;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 7rem;
+
+  nav {
+    display: flex;
+    gap: 0.5rem;
+  }
+}
+
+.brand {
+  font-size: 1.125rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.nav-link {
+  padding: 0.65rem 0.9rem;
+  color: var(--color-muted);
+  border-radius: 999px;
+  text-decoration: none;
+
+  &:hover,
+  &--active {
+    color: var(--color-text);
+    background: var(--color-surface);
+  }
+}
+
+.eyebrow {
+  margin: 0 0 1.25rem;
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.button {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.9rem 1.25rem;
+  color: #11150a;
+  border-radius: 999px;
+  background: var(--color-accent);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.error-page {
+  width: min(calc(100% - 2rem), 48rem);
+  margin: 15vh auto;
+}
+
+.loading-screen {
+  display: grid;
+  min-height: 100svh;
+  place-content: center;
+  justify-items: center;
+  color: var(--color-muted);
+}
+
+.loading-screen__mark {
+  width: 2.5rem;
+  aspect-ratio: 1;
+  border: 0.25rem solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
+@media (max-width: 36rem) {
+  .app-header {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+}
