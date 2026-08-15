@@ -1,5 +1,8 @@
+import { Button } from "~/secondApp/components/Button/Button";
 import type { Route } from "./+types/about";
 import styles from "./about.module.scss";
+import { IconArea } from "~/secondApp/components/IconArea/IconArea";
+import { ContinueCard } from "~/secondApp/components/ContinueCard/ContinueCard";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "О проекте | Motivator" }];
@@ -18,6 +21,7 @@ export default function About() {
     <section className={styles.page}>
       <p className="eyebrow">Архитектура</p>
       <h1>Простая структура, которая растёт вместе с проектом.</h1>
+      <ContinueCard/>
       <div className={styles.grid}>
         {layers.map(([name, description]) => (
           <article className={styles.card} key={name}>

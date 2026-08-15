@@ -6,4 +6,12 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        loadPaths: ["./app/styles"],
+        additionalData: '@use "variables" as *;\n',
+      },
+    },
+  },
 });
