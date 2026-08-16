@@ -1,0 +1,28 @@
+.card {
+  display: flex;
+  min-width: 0;
+  min-height: 92px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 15px 18px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: var(--color-surface-default);
+}
+
+.card strong {
+  color: var(--color-text-primary);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.card span {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

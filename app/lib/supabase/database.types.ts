@@ -19,6 +19,7 @@ type DbTable<Row, RequiredInsert extends keyof Row> = {
 
 type ProfileRow = {
   id: string;
+  username: string;
   display_name: string | null;
   avatar_url: string | null;
   created_at: string;
@@ -174,6 +175,14 @@ type DailyPlanItemRow = {
   updated_at: string;
 };
 
+type UserSubjectGoalRow = {
+  user_id: string;
+  subject_id: string;
+  target_grade: 2 | 3 | 4 | 5;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -222,9 +231,26 @@ export type Database = {
         DailyPlanItemRow,
         "user_id" | "title" | "estimated_minutes" | "position"
       >;
+      user_subject_goals: DbTable<
+        UserSubjectGoalRow,
+        "user_id" | "subject_id" | "target_grade"
+      >;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      submit_quiz: {
+        Args: {
+          p_activity_id: string;
+          p_answers: Json;
+        };
+        Returns: {
+          attempt_id: string;
+          score: number;
+          correct_answers: number;
+          total_questions: number;
+        }[];
+      };
+    };
     Enums: {
       activity_type: ActivityType;
       progress_status: ProgressStatus;

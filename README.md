@@ -25,6 +25,11 @@ npm run dev
 
 Open http://localhost:5173.
 
+Without `.env.local`, open `/login` and either register a browser-local test
+account or use **Open demo account**. With Supabase variables configured, the
+same forms use Supabase Auth (email + password) and store the unique username
+in `public.profiles`.
+
 ## Validate and preview the production build
 
 ```powershell
@@ -51,6 +56,15 @@ supabase/       PostgreSQL migrations and development seed data
 
 Start locally and keep domain code inside the route that uses it. Move code into `features`, `components`, `ui`, or `lib` only when it is genuinely shared; this prevents premature architecture from slowing development.
 
+Implemented MVP routes:
+
+- `/login`, `/register` — authentication;
+- `/` — personal dashboard;
+- `/subjects`, `/subjects/:subjectSlug` — catalog and subject modules;
+- `/modules/:moduleId`, `/activities/:activityId` — theory, quizzes and free answers;
+- `/results`, `/results/:attemptId` — assessment history and details;
+- `/progress`, `/goals`, `/profile` — progress, target grades and account.
+
 ## Data
 
 Without Supabase environment variables, the app uses an in-memory repository so
@@ -60,6 +74,12 @@ metrics, and an assessment result. To connect PostgreSQL, copy `.env.example`
 to `.env.local`, add the Supabase Project URL and publishable key, and apply the
 SQL migrations plus `supabase/seed.sql`. See
 [docs/data-layer.md](docs/data-layer.md).
+
+Apply migrations in filename order. The 2026-08-16 migrations add unique
+usernames, trusted quiz scoring and per-subject target grades. Quiz answer keys
+remain inaccessible to the browser; scoring runs inside the `submit_quiz`
+PostgreSQL function. Free answers are stored with `submitted` status until a
+server/Edge Function performs AI evaluation.
 
 ## Rendering strategy
 

@@ -288,7 +288,7 @@ async function getDashboard(userId?: string): Promise<DashboardData> {
   }
 
   const client = getSupabaseClient();
-  const [attemptResult, planResult] = await Promise.all([
+  const [attemptResult, planResult, progressResult] = await Promise.all([
     client
       .from("activity_attempts")
       .select("*")
@@ -300,9 +300,17 @@ async function getDashboard(userId?: string): Promise<DashboardData> {
       .eq("user_id", userId)
       .eq("scheduled_for", new Date().toISOString().slice(0, 10))
       .order("position"),
+    client
+      .from("user_activity_progress")
+      .select("*")
+      .eq("user_id", userId),
   ]);
   const attempts = dataOrThrow("activity_attempts", attemptResult);
   const planRows = dataOrThrow("daily_plan_items", planResult);
+  const progressRows = dataOrThrow("user_activity_progress", progressResult);
+  const progressByActivity = new Map(
+    progressRows.map((progress) => [progress.activity_id, progress] as const),
+  );
   const activityById = new Map(
     subjects.flatMap((subject) =>
       subject.modules.flatMap((module) =>
@@ -317,7 +325,9 @@ async function getDashboard(userId?: string): Promise<DashboardData> {
     subjects.find((subject) => subject.status === "in_progress") ?? null;
   const currentModule =
     currentSubject?.modules.find((module) => module.status !== "completed") ?? null;
-  const nextActivity = currentModule?.activities[0] ?? null;
+  const nextActivity = currentModule?.activities.find(
+    (activity) => progressByActivity.get(activity.id)?.status !== "completed",
+  ) ?? null;
   const featuredSubjects = subjects
     .filter((subject) => subject.status === "in_progress")
     .slice(0, 3);
@@ -464,6 +474,237 @@ export const supabaseLearningRepository: LearningRepository = {
         },
       ];
     });
+  },
+
+  async getResult(attemptId, userId) {
+    if (!userId) return null;
+
+    const completedResult = (await this.getResults(userId)).find(
+      (result) => result.id === attemptId,
+    );
+    if (completedResult) return completedResult;
+
+    const client = getSupabaseClient();
+    const attemptResult = await client
+      .from("activity_attempts")
+      .select("*")
+      .eq("id", attemptId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (attemptResult.error) {
+      throw new Error(`Не удалось загрузить результат: ${attemptResult.error.message}`);
+    }
+    const attempt = attemptResult.data;
+    if (!attempt) return null;
+
+    const submissionResult = await client
+      .from("free_answer_submissions")
+      .select("*")
+      .eq("attempt_id", attempt.id)
+      .maybeSingle();
+    if (submissionResult.error) {
+      throw new Error(`Не удалось загрузить ответ: ${submissionResult.error.message}`);
+    }
+
+    return {
+      id: attempt.id,
+      activityId: attempt.activity_id,
+      activityType: "free_answer",
+      score: attempt.score ?? 0,
+      statusLabel: "Ответ отправлен",
+      summary: "Ответ сохранён и ожидает серверной проверки. Результат появится здесь после завершения анализа.",
+      submittedAnswer: submissionResult.data?.answer ?? null,
+      criterionScores: [],
+      aiFeedback: null,
+      completedAt: attempt.submitted_at ?? attempt.updated_at,
+    };
+  },
+
+  async submitQuiz(activityId, answers, userId) {
+    if (!userId) throw new Error("Для отправки теста необходимо войти.");
+
+    const client = getSupabaseClient();
+    const submission = await client.rpc("submit_quiz", {
+      p_activity_id: activityId,
+      p_answers: answers,
+    });
+    const rows = dataOrThrow("submit_quiz", submission);
+    const row = rows[0];
+    if (!row) throw new Error("Сервер не вернул результат теста.");
+
+    return {
+      id: row.attempt_id,
+      activityId,
+      activityType: "quiz",
+      score: row.score,
+      statusLabel:
+        row.score >= 90 ? "Отличный результат" :
+        row.score >= 75 ? "Хороший результат" :
+        row.score >= 60 ? "Тест пройден" :
+        "Нужно повторить тему",
+      summary: `Правильных ответов: ${row.correct_answers} из ${row.total_questions}.`,
+      submittedAnswer: null,
+      criterionScores: [],
+      aiFeedback: null,
+      completedAt: new Date().toISOString(),
+    };
+  },
+
+  async submitFreeAnswer(activityId, answer, userId) {
+    if (!userId) throw new Error("Для отправки ответа необходимо войти.");
+    const activity = findActivity(await getSubjects(userId), activityId);
+    if (activity?.type !== "free_answer") {
+      throw new Error("Задание со свободным ответом не найдено.");
+    }
+
+    const client = getSupabaseClient();
+    const existingAttempt = await client
+      .from("activity_attempts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("activity_id", activityId)
+      .eq("status", "draft")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingAttempt.error) {
+      throw new Error(`Не удалось найти черновик: ${existingAttempt.error.message}`);
+    }
+
+    let attempt = existingAttempt.data;
+    if (!attempt) {
+      const createdAttempt = await client
+        .from("activity_attempts")
+        .insert({ user_id: userId, activity_id: activityId, status: "draft" })
+        .select("*")
+        .single();
+      attempt = dataOrThrow("activity_attempts", createdAttempt);
+    }
+
+    const savedSubmission = await client
+      .from("free_answer_submissions")
+      .upsert({ attempt_id: attempt.id, answer: answer.trim() }, { onConflict: "attempt_id" });
+    if (savedSubmission.error) {
+      throw new Error(`Не удалось сохранить ответ: ${savedSubmission.error.message}`);
+    }
+
+    const submittedAt = new Date().toISOString();
+    const [attemptUpdate, progressUpdate] = await Promise.all([
+      client
+        .from("activity_attempts")
+        .update({ status: "submitted", submitted_at: submittedAt })
+        .eq("id", attempt.id),
+      client
+        .from("user_activity_progress")
+        .upsert(
+          { user_id: userId, activity_id: activityId, status: "completed", progress_percent: 100 },
+          { onConflict: "user_id,activity_id" },
+        ),
+    ]);
+    if (attemptUpdate.error) {
+      throw new Error(`Не удалось отправить ответ: ${attemptUpdate.error.message}`);
+    }
+    if (progressUpdate.error) {
+      throw new Error(`Не удалось обновить прогресс: ${progressUpdate.error.message}`);
+    }
+
+    return {
+      id: attempt.id,
+      activityId,
+      activityType: "free_answer",
+      score: 0,
+      statusLabel: "Ответ отправлен",
+      summary: "Ответ ожидает серверной проверки. После подключения AI-функции здесь появятся балл и рекомендации.",
+      submittedAnswer: answer.trim(),
+      criterionScores: [],
+      aiFeedback: null,
+      completedAt: submittedAt,
+    };
+  },
+
+  async completeTheory(activityId, userId) {
+    if (!userId) throw new Error("Для обновления прогресса необходимо войти.");
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_activity_progress")
+      .upsert(
+        { user_id: userId, activity_id: activityId, status: "completed", progress_percent: 100 },
+        { onConflict: "user_id,activity_id" },
+      );
+    if (result.error) {
+      throw new Error(`Не удалось отметить материал прочитанным: ${result.error.message}`);
+    }
+  },
+
+  async saveQuizProgress(activityId, answeredCount, totalQuestions, userId) {
+    if (!userId) throw new Error("Для обновления прогресса необходимо войти.");
+    const progressPercent = Math.min(
+      99,
+      Math.max(0, Math.round(answeredCount * 100 / Math.max(1, totalQuestions))),
+    );
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_activity_progress")
+      .upsert(
+        {
+          user_id: userId,
+          activity_id: activityId,
+          status: progressPercent > 0 ? "in_progress" : "not_started",
+          progress_percent: progressPercent,
+        },
+        { onConflict: "user_id,activity_id" },
+      );
+    if (result.error) {
+      throw new Error(`Не удалось сохранить прогресс теста: ${result.error.message}`);
+    }
+  },
+
+  async setTodayPlanItemCompleted(itemId, isCompleted, userId) {
+    if (!userId) throw new Error("Для обновления плана необходимо войти.");
+    const client = getSupabaseClient();
+    const result = await client
+      .from("daily_plan_items")
+      .update({ is_completed: isCompleted })
+      .eq("id", itemId)
+      .eq("user_id", userId);
+    if (result.error) {
+      throw new Error(`Не удалось обновить план: ${result.error.message}`);
+    }
+  },
+
+  async getGoals(userId) {
+    if (!userId) return [];
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_subject_goals")
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false });
+    const rows = dataOrThrow("user_subject_goals", result);
+    return rows.map((row) => ({
+      subjectId: row.subject_id,
+      targetGrade: row.target_grade,
+      updatedAt: row.updated_at,
+    }));
+  },
+
+  async setGoal(subjectId, targetGrade, userId) {
+    if (!userId) throw new Error("Для сохранения цели необходимо войти.");
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_subject_goals")
+      .upsert(
+        { user_id: userId, subject_id: subjectId, target_grade: targetGrade },
+        { onConflict: "user_id,subject_id" },
+      )
+      .select("*")
+      .single();
+    const row = dataOrThrow("user_subject_goals", result);
+    return {
+      subjectId: row.subject_id,
+      targetGrade: row.target_grade,
+      updatedAt: row.updated_at,
+    };
   },
 
   async saveFreeAnswerDraft(activityId, answer, userId) {

@@ -4,6 +4,7 @@ export type ProgressStatus = "not_started" | "in_progress" | "completed";
 export type SubjectTheme = "blue" | "olive";
 export type ActivityType = "theory" | "quiz" | "free_answer";
 export type AttemptStatus = "draft" | "submitted" | "reviewing" | "completed";
+export type TargetGrade = 2 | 3 | 4 | 5;
 
 export type TheorySection = {
   id: Identifier;
@@ -157,6 +158,12 @@ export type AssessmentResult = {
 export type FreeAnswerDraft = {
   activityId: Identifier;
   answer: string;
+  updatedAt: string;
+};
+
+export type SubjectGoal = {
+  subjectId: Identifier;
+  targetGrade: TargetGrade;
   updatedAt: string;
 };
 

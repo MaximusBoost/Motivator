@@ -6,6 +6,8 @@ import type {
   LearningModule,
   QuizActivity,
   Subject,
+  SubjectGoal,
+  TargetGrade,
 } from "~/data/types";
 
 export interface LearningRepository {
@@ -16,6 +18,31 @@ export interface LearningRepository {
   getQuiz(activityId: string): Promise<QuizActivity | null>;
   getFreeAnswer(activityId: string): Promise<FreeAnswerActivity | null>;
   getResults(userId?: string): Promise<AssessmentResult[]>;
+  getResult(attemptId: string, userId?: string): Promise<AssessmentResult | null>;
+  submitQuiz(
+    activityId: string,
+    answers: Record<string, string>,
+    userId?: string,
+  ): Promise<AssessmentResult>;
+  submitFreeAnswer(
+    activityId: string,
+    answer: string,
+    userId?: string,
+  ): Promise<AssessmentResult>;
+  completeTheory(activityId: string, userId?: string): Promise<void>;
+  saveQuizProgress(
+    activityId: string,
+    answeredCount: number,
+    totalQuestions: number,
+    userId?: string,
+  ): Promise<void>;
+  setTodayPlanItemCompleted(
+    itemId: string,
+    isCompleted: boolean,
+    userId?: string,
+  ): Promise<void>;
+  getGoals(userId?: string): Promise<SubjectGoal[]>;
+  setGoal(subjectId: string, targetGrade: TargetGrade, userId?: string): Promise<SubjectGoal>;
   saveFreeAnswerDraft(
     activityId: string,
     answer: string,

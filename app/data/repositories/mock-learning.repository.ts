@@ -7,6 +7,9 @@ import type {
   QuizActivity,
   QuizQuestion,
   Subject,
+  SubjectGoal,
+  TargetGrade,
+  TodayPlanItem,
 } from "~/data/types";
 import type { LearningRepository } from "./learning.repository";
 
@@ -426,68 +429,222 @@ const results: AssessmentResult[] = [
 
 const drafts = new Map<string, string>();
 
+const mockTodayPlan: TodayPlanItem[] = [
+  {
+    id: "plan-rhb-review",
+    title: "Повторить РХБ защиту",
+    estimatedMinutes: 10,
+    isCompleted: true,
+    activityId: "rhb-m2-theory",
+  },
+  {
+    id: "plan-topography-quiz",
+    title: "Пройти тест по топографии",
+    estimatedMinutes: 15,
+    isCompleted: false,
+    activityId: "topography-m1-quiz",
+  },
+  {
+    id: "plan-medical-answer",
+    title: "Развернутый ответ: медицина",
+    estimatedMinutes: 20,
+    isCompleted: false,
+    activityId: medicalFreeAnswer.id,
+  },
+];
+
+const demoGoals: SubjectGoal[] = [
+  { subjectId: "medical", targetGrade: 4, updatedAt: "2026-08-16T00:00:00.000Z" },
+  { subjectId: "firearms", targetGrade: 5, updatedAt: "2026-08-16T00:00:00.000Z" },
+];
+
+type StoredMockState = {
+  activityProgress: Record<string, number>;
+  results: AssessmentResult[];
+  todayPlanCompletion: Record<string, boolean>;
+  goals: Record<string, TargetGrade>;
+};
+
+const emptyMockState: StoredMockState = {
+  activityProgress: {},
+  results: [],
+  todayPlanCompletion: {},
+  goals: {},
+};
+
+function mockStateKey(userId: string) {
+  return `motivator:learning:${userId}`;
+}
+
+function readMockState(userId: string): StoredMockState {
+  if (typeof window === "undefined") return clone(emptyMockState);
+
+  try {
+    const raw = window.localStorage.getItem(mockStateKey(userId));
+    if (!raw) return clone(emptyMockState);
+    const parsed = JSON.parse(raw) as Partial<StoredMockState>;
+    return {
+      activityProgress: parsed.activityProgress ?? {},
+      results: parsed.results ?? [],
+      todayPlanCompletion: parsed.todayPlanCompletion ?? {},
+      goals: parsed.goals ?? {},
+    };
+  } catch {
+    return clone(emptyMockState);
+  }
+}
+
+function writeMockState(userId: string, state: StoredMockState) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(mockStateKey(userId), JSON.stringify(state));
+  }
+}
+
+function progressStatus(progressPercent: number): ProgressStatus {
+  if (progressPercent >= 100) return "completed";
+  if (progressPercent > 0) return "in_progress";
+  return "not_started";
+}
+
+function subjectsForUser(userId?: string): Subject[] {
+  const userSubjects = clone(subjects);
+  if (!userId) return userSubjects;
+
+  const state = readMockState(userId);
+  for (const subject of userSubjects) {
+    let subjectDelta = 0;
+
+    for (const module of subject.modules) {
+      const hasOverride = module.activities.some(
+        (activity) => state.activityProgress[activity.id] !== undefined,
+      );
+      if (!hasOverride || module.activities.length === 0) continue;
+
+      const nextProgress = Math.round(
+        module.activities.reduce(
+          (sum, activity) => sum + (state.activityProgress[activity.id] ?? module.progressPercent),
+          0,
+        ) / module.activities.length,
+      );
+      subjectDelta += nextProgress - module.progressPercent;
+      module.progressPercent = nextProgress;
+      module.status = progressStatus(nextProgress);
+    }
+
+    subject.progressPercent = Math.max(
+      0,
+      Math.min(100, Math.round(subject.progressPercent + subjectDelta / Math.max(1, subject.modules.length))),
+    );
+    subject.status = progressStatus(subject.progressPercent);
+
+    const activityIds = new Set(
+      subject.modules.flatMap((module) => module.activities.map((activity) => activity.id)),
+    );
+    const lastResult = state.results.find((result) => activityIds.has(result.activityId));
+    if (lastResult) subject.lastScore = lastResult.score;
+  }
+
+  return userSubjects;
+}
+
+function findQuizActivity(activityId: string): QuizActivity | null {
+  for (const subject of subjects) {
+    for (const module of subject.modules) {
+      const activity = module.activities.find(
+        (item): item is QuizActivity => item.id === activityId && item.type === "quiz",
+      );
+      if (activity) return activity;
+    }
+  }
+  return null;
+}
+
+function findFreeAnswerActivity(activityId: string): FreeAnswerActivity | null {
+  for (const subject of subjects) {
+    for (const module of subject.modules) {
+      const activity = module.activities.find(
+        (item): item is FreeAnswerActivity => item.id === activityId && item.type === "free_answer",
+      );
+      if (activity) return activity;
+    }
+  }
+  return null;
+}
+
+function createResultId(prefix: string) {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? `${prefix}-${crypto.randomUUID()}`
+    : `${prefix}-${Date.now()}`;
+}
+
+function storeResult(userId: string, result: AssessmentResult) {
+  const state = readMockState(userId);
+  state.results = [result, ...state.results.filter((item) => item.id !== result.id)];
+  state.activityProgress[result.activityId] = 100;
+  writeMockState(userId, state);
+}
+
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
 export const mockLearningRepository: LearningRepository = {
-  async getDashboard() {
+  async getDashboard(userId = "demo-user") {
+    const userSubjects = subjectsForUser(userId);
+    const state = readMockState(userId);
+    const userResults = userId === "demo-user" ? [...state.results, ...results] : state.results;
+    const scores = userResults.map((result) => result.score).filter((score) => score > 0);
+    const currentSubject = userSubjects.find((subject) => subject.status === "in_progress") ?? null;
+    const currentModule = currentSubject?.modules.find((module) => module.status === "in_progress") ??
+      currentSubject?.modules.find((module) => module.status === "not_started") ??
+      null;
+    const nextActivity = currentModule?.activities.find((activity) => {
+      const fallbackProgress = currentModule.progressPercent > 0 && activity.type === "theory" ? 100 : 0;
+      return (state.activityProgress[activity.id] ?? fallbackProgress) < 100;
+    }) ?? null;
+    const featuredSubjects = userSubjects
+      .filter((subject) => subject.id !== currentSubject?.id && subject.status === "in_progress")
+      .slice(0, 3);
+
     return clone({
       stats: {
-        subjectsStarted: 7,
-        averageScore: 68,
-        quizzesCompleted: 12,
-        needsReview: 3,
+        subjectsStarted: userSubjects.filter((subject) => subject.status !== "not_started").length,
+        averageScore: scores.length > 0
+          ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+          : 0,
+        quizzesCompleted: userResults.filter((result) => result.activityType === "quiz").length,
+        needsReview: userResults.filter((result) => result.score > 0 && result.score < 70).length,
       },
-      continueLearning: {
-        subjectId: "medical",
-        subjectTitle: "Медицинская подготовка",
-        subjectCode: "М",
-        moduleId: "medical-m4",
-        moduleNumber: 4,
-        modulesTotal: 8,
-        moduleTitle: "Первая помощь",
-        nextActivityId: medicalQuiz.id,
-        nextActivityTitle: "Тест: первичная оценка состояния",
-        progressPercent: 62,
-      },
-      todayPlan: [
-        {
-          id: "plan-rhb-review",
-          title: "Повторить РХБ защиту",
-          estimatedMinutes: 10,
-          isCompleted: true,
-          activityId: "rhb-m2-theory",
-        },
-        {
-          id: "plan-topography-quiz",
-          title: "Пройти тест по топографии",
-          estimatedMinutes: 15,
-          isCompleted: false,
-          activityId: "topography-m1-quiz",
-        },
-        {
-          id: "plan-medical-answer",
-          title: "Развернутый ответ: медицина",
-          estimatedMinutes: 20,
-          isCompleted: false,
-          activityId: medicalFreeAnswer.id,
-        },
-      ],
-      featuredSubjects: [subjects[1], subjects[2], subjects[4]],
+      continueLearning: currentSubject && currentModule && nextActivity ? {
+        subjectId: currentSubject.id,
+        subjectTitle: currentSubject.title,
+        subjectCode: currentSubject.title.charAt(0),
+        moduleId: currentModule.id,
+        moduleNumber: currentModule.number,
+        modulesTotal: currentSubject.modules.length,
+        moduleTitle: currentModule.title,
+        nextActivityId: nextActivity.id,
+        nextActivityTitle: nextActivity.description ?? nextActivity.title,
+        progressPercent: currentSubject.progressPercent,
+      } : null,
+      todayPlan: mockTodayPlan.map((item) => ({
+        ...item,
+        isCompleted: state.todayPlanCompletion[item.id] ?? item.isCompleted,
+      })),
+      featuredSubjects: featuredSubjects.length > 0 ? featuredSubjects : userSubjects.slice(0, 3),
     });
   },
 
-  async getSubjects() {
-    return clone(subjects);
+  async getSubjects(userId) {
+    return subjectsForUser(userId);
   },
 
-  async getSubjectBySlug(slug) {
-    return clone(subjects.find((subject) => subject.slug === slug) ?? null);
+  async getSubjectBySlug(slug, userId) {
+    return subjectsForUser(userId).find((subject) => subject.slug === slug) ?? null;
   },
 
-  async getModule(moduleId) {
-    for (const subject of subjects) {
+  async getModule(moduleId, userId) {
+    for (const subject of subjectsForUser(userId)) {
       const module = subject.modules.find((item) => item.id === moduleId);
       if (module) return clone(module);
     }
@@ -495,32 +652,151 @@ export const mockLearningRepository: LearningRepository = {
   },
 
   async getQuiz(activityId) {
-    for (const subject of subjects) {
-      for (const module of subject.modules) {
-        const activity = module.activities.find(
-          (item): item is QuizActivity => item.id === activityId && item.type === "quiz",
-        );
-        if (activity) return clone(activity);
-      }
-    }
-    return null;
+    return clone(findQuizActivity(activityId));
   },
 
   async getFreeAnswer(activityId) {
-    for (const subject of subjects) {
-      for (const module of subject.modules) {
-        const activity = module.activities.find(
-          (item): item is FreeAnswerActivity =>
-            item.id === activityId && item.type === "free_answer",
-        );
-        if (activity) return clone(activity);
-      }
-    }
-    return null;
+    return clone(findFreeAnswerActivity(activityId));
   },
 
-  async getResults() {
-    return clone(results);
+  async getResults(userId = "demo-user") {
+    const storedResults = readMockState(userId).results;
+    return clone(userId === "demo-user" ? [...storedResults, ...results] : storedResults);
+  },
+
+  async getResult(attemptId, userId = "demo-user") {
+    const allResults = userId === "demo-user"
+      ? [...readMockState(userId).results, ...results]
+      : readMockState(userId).results;
+    return clone(allResults.find((result) => result.id === attemptId) ?? null);
+  },
+
+  async submitQuiz(activityId, answers, userId = "demo-user") {
+    const activity = findQuizActivity(activityId);
+    if (!activity) throw new Error("Тест не найден.");
+    if (activity.questions.some((question) => !answers[question.id])) {
+      throw new Error("Ответьте на все вопросы перед отправкой теста.");
+    }
+
+    const correctAnswers = activity.questions.filter((question) => {
+      const selectedOption = question.options.find((option) => option.id === answers[question.id]);
+      return selectedOption?.label === "A";
+    }).length;
+    const score = Math.round(correctAnswers * 100 / Math.max(1, activity.questions.length));
+    const result: AssessmentResult = {
+      id: createResultId("quiz"),
+      activityId,
+      activityType: "quiz",
+      score,
+      statusLabel:
+        score >= 90 ? "Отличный результат" :
+        score >= 75 ? "Хороший результат" :
+        score >= 60 ? "Тест пройден" :
+        "Нужно повторить тему",
+      summary: `Правильных ответов: ${correctAnswers} из ${activity.questions.length}.`,
+      submittedAnswer: null,
+      criterionScores: [],
+      aiFeedback: null,
+      completedAt: new Date().toISOString(),
+    };
+    storeResult(userId, result);
+    return clone(result);
+  },
+
+  async submitFreeAnswer(activityId, answer, userId = "demo-user") {
+    const activity = findFreeAnswerActivity(activityId);
+    if (!activity) throw new Error("Задание со свободным ответом не найдено.");
+
+    const normalized = answer.trim().toLocaleLowerCase("ru");
+    if (normalized.length < 20) throw new Error("Добавьте больше деталей: минимум 20 символов.");
+
+    const completeness = Math.min(100, Math.max(45, Math.round(normalized.length / 4)));
+    const logic = Math.min(100, 55 + (normalized.includes("затем") ? 18 : 0) + (normalized.includes("после") ? 12 : 0));
+    const keywords = ["оцен", "услов", "риск", "приоритет", "действ", "проверк"];
+    const keywordScore = keywords.filter((keyword) => normalized.includes(keyword)).length;
+    const terms = Math.min(100, 45 + keywordScore * 9);
+    const scores = activity.criteria.map((criterion) => ({
+      criterionId: criterion.id,
+      title: criterion.title,
+      score: criterion.position === 1 ? completeness : criterion.position === 2 ? logic : terms,
+    }));
+    const score = Math.round(scores.reduce((total, item, index) => {
+      const weight = activity.criteria[index]?.weightPercent ?? 0;
+      return total + item.score * weight / 100;
+    }, 0));
+
+    const result: AssessmentResult = {
+      id: createResultId("free-answer"),
+      activityId,
+      activityType: "free_answer",
+      score,
+      statusLabel: "Предварительный результат",
+      summary: "В demo-режиме выполнена локальная проверка структуры и ключевых понятий. После подключения ИИ результат будет формироваться на сервере.",
+      submittedAnswer: answer.trim(),
+      criterionScores: scores,
+      aiFeedback: null,
+      completedAt: new Date().toISOString(),
+    };
+    storeResult(userId, result);
+    return clone(result);
+  },
+
+  async completeTheory(activityId, userId = "demo-user") {
+    const theoryExists = subjects.some((subject) => subject.modules.some((module) =>
+      module.activities.some((activity) => activity.id === activityId && activity.type === "theory"),
+    ));
+    if (!theoryExists) throw new Error("Теоретический материал не найден.");
+
+    const state = readMockState(userId);
+    state.activityProgress[activityId] = 100;
+    writeMockState(userId, state);
+  },
+
+  async saveQuizProgress(activityId, answeredCount, totalQuestions, userId = "demo-user") {
+    if (!findQuizActivity(activityId)) throw new Error("Тест не найден.");
+    const state = readMockState(userId);
+    state.activityProgress[activityId] = Math.min(
+      99,
+      Math.max(0, Math.round(answeredCount * 100 / Math.max(1, totalQuestions))),
+    );
+    writeMockState(userId, state);
+  },
+
+  async setTodayPlanItemCompleted(itemId, isCompleted, userId = "demo-user") {
+    if (!mockTodayPlan.some((item) => item.id === itemId)) {
+      throw new Error("Задача плана не найдена.");
+    }
+    const state = readMockState(userId);
+    state.todayPlanCompletion[itemId] = isCompleted;
+    writeMockState(userId, state);
+  },
+
+  async getGoals(userId = "demo-user") {
+    const state = readMockState(userId);
+    const baseGoals = userId === "demo-user" ? demoGoals : [];
+    const goalsBySubject = new Map(baseGoals.map((goal) => [goal.subjectId, goal]));
+    for (const [subjectId, targetGrade] of Object.entries(state.goals)) {
+      goalsBySubject.set(subjectId, {
+        subjectId,
+        targetGrade,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    return clone([...goalsBySubject.values()]);
+  },
+
+  async setGoal(subjectId, targetGrade, userId = "demo-user") {
+    if (!subjects.some((subject) => subject.id === subjectId)) {
+      throw new Error("Предмет не найден.");
+    }
+    const state = readMockState(userId);
+    state.goals[subjectId] = targetGrade;
+    writeMockState(userId, state);
+    return {
+      subjectId,
+      targetGrade,
+      updatedAt: new Date().toISOString(),
+    };
   },
 
   async saveFreeAnswerDraft(activityId, answer, userId = "demo-user") {

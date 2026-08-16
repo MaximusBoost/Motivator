@@ -1,9 +1,11 @@
 import type { CSSProperties } from "react";
+import clsx from "clsx";
 import styles from "./progressTrack.module.scss";
 
 type ProgressTrackProps = {
   value: number;
   label?: string;
+  color?: "blue" | "olive" | "success";
 };
 
 type ProgressStyles = CSSProperties & {
@@ -13,6 +15,7 @@ type ProgressStyles = CSSProperties & {
 export const ProgressTrack = ({
   value,
   label = "Прогресс",
+  color = "blue",
 }: ProgressTrackProps) => {
   const normalizedValue = Math.min(100, Math.max(0, value));
 
@@ -22,7 +25,7 @@ export const ProgressTrack = ({
 
   return (
     <div
-      className={styles.track}
+      className={clsx(styles.track, styles[color])}
       style={progressStyles}
       role="progressbar"
       aria-label={label}

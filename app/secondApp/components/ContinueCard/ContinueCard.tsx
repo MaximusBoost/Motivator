@@ -1,41 +1,40 @@
-import { IconArea } from "../IconArea/IconArea";
-import style from "./continueCard.module.scss";
-import vmpIcon from "../imagesMilitary/ВМП.svg";
-import { ContinueCardType } from "~/interface/interface";
-import { ProgressTrack } from "../ProgressTrack/ProgressTrack";
-import { Button } from "../Button/Button";
+import type { ContinueLearning } from "~/data/types";
 
-export const ContinueCard = (children: ContinueCardType) => {
+import { Button } from "../Button/Button";
+import { ProgressTrack } from "../ProgressTrack/ProgressTrack";
+import styles from "./continueCard.module.scss";
+
+type ContinueCardProps = {
+  item: ContinueLearning;
+};
+
+export function ContinueCard({ item }: ContinueCardProps) {
   return (
-    <div className={style.wrapper} id={children.id}>
-      <IconArea icon={vmpIcon} width="50px" height="50px" />
-      <div className={style.rightMainPart}>
-        <div className={style.upPart}>
-          <div className={style.upLeftPart}>
-            <p className={style.nameSubject}>{children.nameSubject}</p>
-            <p className={style.underNameSubject}>
-              Модуль {children.firstSerialNumber} из{" "}
-              {children.secondSerialNumber} • {children.nameModule}
-            </p>
-          </div>
+    <article className={styles.card}>
+      <div className={styles.icon} aria-hidden="true">{item.subjectCode}</div>
+
+      <div className={styles.content}>
+        <div className={styles.heading}>
+          <h3>{item.subjectTitle}</h3>
+          <p>Модуль {item.moduleNumber} из {item.modulesTotal} • {item.moduleTitle}</p>
         </div>
-        <div className={style.downPart}>
-          <div className={style.downLeftPart}>
-            <div className={style.leftDownPart}></div>
-            <p className={style.upTextDownPart}>Следующая задача</p>
-            <p className={style.downTextDownPart}>{children.contuniueQuest}</p>
-            <div className={style.progressTrackWrap}>
-              <ProgressTrack value={children.percent} />
-              <p className={style.percentText}>{children.percent}%</p>
+
+        <div className={styles.nextRow}>
+          <div className={styles.nextTask}>
+            <p className={styles.eyebrow}>Следующая задача</p>
+            <p className={styles.taskTitle}>{item.nextActivityTitle}</p>
+            <div className={styles.progressRow}>
+              <ProgressTrack
+                value={item.progressPercent}
+                label={`Прогресс по предмету «${item.subjectTitle}»`}
+              />
+              <span>{item.progressPercent}%</span>
             </div>
           </div>
-          <div className={style.btnWrapper}>
 
-          <Button text='Продолжить'/>
-          </div>
-          {/* тут надо организовать процентный прогресс выполняемой таски пользователем */}
+          <Button text="Продолжить" to={`/activities/${item.nextActivityId}`} />
         </div>
       </div>
-    </div>
+    </article>
   );
-};
+}

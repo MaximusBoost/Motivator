@@ -8,8 +8,9 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { AuthProvider } from "~/features/auth/AuthProvider";
 
-import './styles/global.scss';
+import "./styles/global.scss";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -30,7 +31,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="darkreader-lock" />
         <Meta />
         <Links />
       </head>
@@ -44,7 +44,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  );
 }
 
 export function HydrateFallback() {
@@ -61,7 +65,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main>
+    <main style={{ padding: "32px" }}>
       <h1>{title}</h1>
       <p>{message}</p>
     </main>

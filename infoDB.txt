@@ -617,3 +617,40 @@ await learningRepository.getFreeAnswer("medical-m4-free-answer-1");
 
 Результаты:
 await learningRepository.getResults();
+
+
+16. ЧТО ДОБАВЛЕНО В MVP 16.08.2026
+---------------------------------
+
+Все персональные методы теперь получают user.id:
+
+const userId = await getCurrentUserId();
+const dashboard = await learningRepository.getDashboard(userId);
+
+Новые действия репозитория:
+
+await learningRepository.submitQuiz(activityId, answers, userId);
+await learningRepository.submitFreeAnswer(activityId, answer, userId);
+await learningRepository.completeTheory(activityId, userId);
+await learningRepository.setTodayPlanItemCompleted(itemId, true, userId);
+await learningRepository.getGoals(userId);
+await learningRepository.setGoal(subjectId, 5, userId);
+
+В mock-режиме персональное состояние хранится в localStorage под ключом
+motivator:learning:<userId>. Оно нужно только для разработки без Supabase.
+
+В Supabase-режиме:
+
+- auth.users хранит email и пароль средствами Supabase Auth;
+- profiles хранит уникальный никнейм;
+- user_activity_progress хранит прогресс активностей;
+- activity_attempts и quiz_answers хранят попытки и ответы;
+- user_subject_goals хранит целевые оценки;
+- daily_plan_items хранит личный план на день;
+- submit_quiz(...) проверяет тест на стороне PostgreSQL, поэтому правильные
+  ответы не попадают в браузер.
+
+Свободный ответ в Supabase после отправки получает статус submitted. Балл и
+AI-комментарий появятся после подключения серверной Edge Function. Локальный
+mock показывает только явно подписанную предварительную алгоритмическую оценку,
+чтобы не выдавать ее за настоящий AI-анализ.
