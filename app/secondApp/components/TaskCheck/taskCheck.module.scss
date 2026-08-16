@@ -1,0 +1,63 @@
+.task {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 14px;
+  width: 100%;
+
+  cursor: pointer;
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+
+  appearance: none;
+  background-color: var(--color-surface-default);
+  border: 1px solid var(--color-border-default);
+  border-radius: 50%;
+
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.checkbox:checked {
+  background-color: var(--color-status-success);
+  border-color: var(--color-status-success);
+}
+
+.checkbox:focus-visible {
+  outline: 3px solid rgb(63 122 93 / 25%);
+  outline-offset: 2px;
+}
+
+.content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.title {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.minutes {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkbox {
+    transition: none;
+  }
+}

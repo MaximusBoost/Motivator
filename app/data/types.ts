@@ -159,3 +159,11 @@ export type FreeAnswerDraft = {
   answer: string;
   updatedAt: string;
 };
+
+export type SubjectCardType = {
+  title: string;
+  subtitle: string;
+  modules: [];
+  progressPercent: number;
+  id: string;
+};

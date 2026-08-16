@@ -1,9 +1,11 @@
 import { IconArea } from "~/secondApp/components/IconArea/IconArea";
+import { useState } from "react";
 import type { Route } from "./+types/home";
 import { ContinueCard } from "~/secondApp/components/ContinueCard/ContinueCard";
 import { learningRepository } from "~/data/learning";
 import { StartCard } from "~/secondApp/components/StartCard/StartCard";
 import { TodayPlan } from "~/secondApp/components/TodayPlan/TodayPlan";
+import { SubjectCard } from "~/secondApp/components/SubjectCard/SubjectCard";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -14,9 +16,20 @@ export function meta({}: Route.MetaArgs) {
 
 const dashboard = await learningRepository.getDashboard();
 const current = dashboard.continueLearning;
-const todayPlan = dashboard.todayPlan;
+const initialTodayPlan = dashboard.todayPlan;
+const featuredSubjects = dashboard.featuredSubjects;
 
 export default function Home() {
+  const [todayPlan, setTodayPlan] = useState(initialTodayPlan);
+
+  const handleTaskToggle = (taskId: string, isCompleted: boolean) => {
+    setTodayPlan((currentTasks) =>
+      currentTasks.map((task) =>
+        task.id === taskId ? { ...task, isCompleted } : task,
+      ),
+    );
+  };
+
   console.log(dashboard);
   return (
     <main>
@@ -30,7 +43,7 @@ export default function Home() {
       />
 
       <StartCard count="74" smallText="хуй знает что"/>
-      <TodayPlan items={todayPlan}/>
+      <TodayPlan items={todayPlan} onToggle={handleTaskToggle} />
     </main>
   );
 }

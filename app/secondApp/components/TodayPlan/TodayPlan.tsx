@@ -1,26 +1,25 @@
-import style from "./todayPlan.module.scss";
-import { TodayPlanItem } from "~/data/types";
+import type { TodayPlanItem } from "~/data/types";
+
+import { TaskCheck } from "../TaskCheck/TaskCheck";
+import styles from "./todayPlan.module.scss";
+
 type TodayPlanProps = {
-  items: TodayPlanItem[];
+  items: readonly TodayPlanItem[];
+  onToggle: (taskId: string, isCompleted: boolean) => void;
 };
 
-export const TodayPlan = ({ items }: TodayPlanProps) => {
+export const TodayPlan = ({ items, onToggle }: TodayPlanProps) => {
   return (
-    <div className={style.todayPlan}>
-      <h2>План на сегодня</h2>
-      <div className={style.tasksWrapper}>
+    <section className={styles.todayPlan} aria-labelledby="today-plan-title">
+      <h2 className={styles.heading} id="today-plan-title">
+        План на сегодня
+      </h2>
+
+      <div className={styles.tasksWrapper}>
         {items.map((task) => (
-          <div className={style.taskWrapper}>
-            <label>
-              <input type="checkbox" name="subscribe" checked></input>
-              <h3 className={style.title}>{task.title}</h3>
-              <p className={style.estimatedMinutes}>
-                {task.estimatedMinutes} минут
-              </p>
-            </label>
-          </div>
+          <TaskCheck key={task.id} task={task} onToggle={onToggle} />
         ))}
       </div>
-    </div>
+    </section>
   );
 };
