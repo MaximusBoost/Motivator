@@ -1,0 +1,34 @@
+.todayPlan {
+  border-radius: 14px;
+  border: 1px solid #d9e0e7;
+  background: #fff;
+  width: fit-content;
+  padding-left: 24px;
+  max-width: 336px;
+  width: 100%;
+}
+
+.tasksWrapper {
+    display: flex;
+    gap: 42px;
+    flex-direction: column;
+    padding-bottom: 90px;
+}
+
+.taskWrapper {
+   
+}
+
+.title {
+}
+
+.estimatedMinutes {
+}
+
+h2 {
+  color: var(--color-text-black);
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 700;
+  padding: 22px 0 24px 0;
+}

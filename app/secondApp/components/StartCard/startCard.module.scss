@@ -1,0 +1,26 @@
+.wrapper {
+  display: inline-flex;
+  padding: 15px 104px 23px 18px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--color-progressTrack-back);
+  background: var(--color-surface-default);
+}
+
+.bigText {
+  color: var(--color-text-primary);
+  font-size: 27px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
+}
+
+.smallText {
+  color: var(--color-text-gray);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
+}

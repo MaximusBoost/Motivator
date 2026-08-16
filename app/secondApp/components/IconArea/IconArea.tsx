@@ -2,7 +2,12 @@ import { IconAreaType } from "~/interface/interface";
 import style from "./iconArea.module.scss";
 import vmpIcon from "../imagesMilitary/ВМП.svg";
 
+import { learningRepository } from "~/data/learning";
+
+
 export const IconArea = (children: IconAreaType) => {
+
+
   return (
     <div
       className={style.wrapper}

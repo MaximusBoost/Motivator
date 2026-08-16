@@ -1,8 +1,3 @@
-:root {
-    --color-sidebar: #101827;
-    --color-blue-dark: #2D5F87;
-    --color-blue-light: #EAF1F6;
-    --color-white: #fff;
-    --color-bg-main:#F3F5F7;
-    --color-text-gray: #A7B2C2;
-}
+// Только Sass-переменные, функции и миксины: этот файл Vite добавляет в каждый
+// .scss и .module.scss. Обычные CSS-правила размещай в global.scss или tokens.
+// Пример: $mobile-breakpoint: 768px;

@@ -1,6 +1,91 @@
 .wrapper {
- background-color: #fff;
- border-radius: 14px;
- border: 1px solid #D9E0E7;
- color: #000 
+  background-color: #fff;
+  border-radius: 14px;
+  border: 1px solid #d9e0e7;
+  color: #000;
+  display: flex;
+  flex-direction: row;
+  width: fit-content;
+  height: fit-content;
+  padding: 24px 0 0 24px;
+}
+
+.rightMainPart {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 0 24px;
+}
+
+.upPart {
+  padding: 0 380px 28px 0;
+  display: flex;
+  flex-direction: row;
+}
+
+.upLeftPart {
+}
+
+.nameSubject {
+  color: #17202d;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
+  padding-bottom: 7px;
+}
+
+.underNameSubject {
+  color: var(--color-text-gray);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
+}
+
+.downPart {
+  display: flex;  
+}
+
+.downLeftPart {
+  flex: 1;
+}
+
+.upTextDownPart {
+  color: var(--color-text-gray);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  padding-bottom: 7px;
+}
+
+.downTextDownPart {
+  color: var(--color-text-black);
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  padding-bottom: 20px;
+}
+
+.progressTrackWrap {
+  padding-bottom: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.percentText {
+  padding-left: 14px;
+  color: var(--color-text-black);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
+}
+
+.btnWrapper{
+  margin-left: auto;
+  padding: 0 28px 0 6px;
+  display: flex;
+  align-items: center;
 }

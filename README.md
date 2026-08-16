@@ -1,19 +1,18 @@
 # Motivator
 
-React MVP using React Router Framework Mode, TypeScript, SCSS Modules, and Vite. It ships as a client-rendered SPA (CSR).
+React MVP using React Router Framework Mode, TypeScript, SCSS Modules, Vite,
+and Supabase/PostgreSQL. It ships as a client-rendered SPA (CSR).
 
 ## Requirements
 
-- Node.js 22.12 or newer (Node 22 LTS is recommended for this project)
+- Node.js 22.12 or newer (Node 24 LTS is recommended for this project)
 - npm 10 or newer
 
-The currently installed Node.js 18.12.1 is too old for Vite 8. Upgrade Node before installing dependencies.
-
-With nvm-windows:
+With nvm-windows, if Node needs to be installed or updated:
 
 ```powershell
-nvm install 22
-nvm use 22
+nvm install 24
+nvm use 24
 node --version
 ```
 
@@ -40,15 +39,27 @@ The static browser build is generated in `build/client`.
 ```text
 app/
   routes/       Route modules and pages
+  data/         Domain types and data repositories
   features/     User scenarios grouped by domain
   components/   Shared composite components
   ui/           Reusable UI primitives
   lib/          Utilities, API clients, and infrastructure
   styles/       Global styles and design tokens
 public/         Static files copied as-is
+supabase/       PostgreSQL migrations and development seed data
 ```
 
 Start locally and keep domain code inside the route that uses it. Move code into `features`, `components`, `ui`, or `lib` only when it is genuinely shared; this prevents premature architecture from slowing development.
+
+## Data
+
+Without Supabase environment variables, the app uses an in-memory repository so
+UI development can continue offline. Its sample catalog mirrors the supplied
+Figma flow: 7 subjects, 42 modules, theory, quizzes, free answers, dashboard
+metrics, and an assessment result. To connect PostgreSQL, copy `.env.example`
+to `.env.local`, add the Supabase Project URL and publishable key, and apply the
+SQL migrations plus `supabase/seed.sql`. See
+[docs/data-layer.md](docs/data-layer.md).
 
 ## Rendering strategy
 

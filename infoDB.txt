@@ -1,0 +1,619 @@
+КАРТА ДАННЫХ MOTIVATOR
+======================
+
+Этот файл объясняет, какие данные уже есть в проекте и как они связаны
+с блоками интерфейса из Figma.
+
+
+1. ОТКУДА БЕРУТСЯ ДАННЫЕ
+------------------------
+
+Импорт в компонентах и страницах всегда один:
+
+import { learningRepository } from "~/data/learning";
+
+Если в .env.local НЕТ VITE_SUPABASE_URL и VITE_SUPABASE_PUBLISHABLE_KEY,
+learningRepository читает локальные данные из:
+
+app/data/repositories/mock-learning.repository.ts
+
+Если ключи Supabase добавлены, learningRepository переключается на:
+
+app/data/repositories/supabase-learning.repository.ts
+
+Компонентам при этом не нужно знать, откуда пришли данные.
+
+
+2. САМОЕ ВАЖНОЕ: ТЕКУЩИЙ МОДУЛЬ И СЛЕДУЮЩЕЕ ЗАДАНИЕ
+--------------------------------------------------
+
+Не нужно искать их вручную внутри subjects. Для карточки
+«Продолжить обучение» получай dashboard:
+
+const dashboard = await learningRepository.getDashboard();
+const current = dashboard.continueLearning;
+
+current может быть null, если пользователь еще ничего не начинал.
+
+if (current) {
+  console.log(current.subjectTitle);       // Медицинская подготовка
+  console.log(current.moduleNumber);       // 4
+  console.log(current.modulesTotal);       // 8
+  console.log(current.moduleTitle);        // Первая помощь (подпись в макете)
+  console.log(current.nextActivityTitle);  // Тест: первичная оценка состояния
+  console.log(current.progressPercent);    // 62
+}
+
+Если нужен не короткий текст карточки, а полный объект текущего модуля:
+
+const currentModule = current
+  ? await learningRepository.getModule(current.moduleId)
+  : null;
+
+console.log(currentModule?.title);
+// Оценка ситуации и принятие решений
+
+То есть "Первая помощь" сейчас является подписью в компактной карточке Figma,
+а "Оценка ситуации и принятие решений" — полным названием medical-m4.
+
+Все поля continueLearning:
+
+dashboard.continueLearning.subjectId
+  ID текущего предмета: "medical".
+
+dashboard.continueLearning.subjectTitle
+  Заголовок карточки: "Медицинская подготовка".
+
+dashboard.continueLearning.subjectCode
+  Короткая подпись/иконка предмета: "М".
+
+dashboard.continueLearning.moduleId
+  ID текущего модуля: "medical-m4".
+
+dashboard.continueLearning.moduleNumber
+  Номер текущего модуля: 4.
+
+dashboard.continueLearning.modulesTotal
+  Всего модулей в предмете: 8.
+
+dashboard.continueLearning.moduleTitle
+  Текст модуля для карточки продолжения: "Первая помощь".
+
+dashboard.continueLearning.nextActivityId
+  ID следующего задания: "medical-m4-quiz".
+  Этот ID нужно использовать для открытия страницы теста.
+
+dashboard.continueLearning.nextActivityTitle
+  Текст следующего задания: "Тест: первичная оценка состояния".
+
+dashboard.continueLearning.progressPercent
+  Процент для progress bar: 62.
+
+ВАЖНО:
+getSubjects() показывает структуру каталога и статусы всех предметов.
+getDashboard().continueLearning явно говорит, какой ОДИН модуль сейчас нужно
+показывать пользователю как основной и какое задание открыть следующим.
+
+
+3. ЧТО ЛЕЖИТ В subjects
+-----------------------
+
+const subjects = await learningRepository.getSubjects();
+
+subjects — массив из 7 предметов:
+
+subjects[0] — Медицинская подготовка, 8 модулей, прогресс 62%, балл 82.
+subjects[1] — Огневая подготовка, 6 модулей, прогресс 44%, балл 71.
+subjects[2] — РХБ защита, 5 модулей, прогресс 81%, балл 88.
+subjects[3] — Тактическая подготовка, 7 модулей, прогресс 33%, балл 64.
+subjects[4] — Военная топография, 7 модулей, прогресс 26%, балл 59.
+subjects[5] — Инженерная подготовка, 4 модуля, прогресс 0%, балла еще нет.
+subjects[6] — Общевоинские уставы, 5 модулей, прогресс 91%, балл 93.
+
+Не рекомендуется постоянно обращаться через subjects[0] или modules[3].
+После сортировки или добавления новых записей индекс изменится. Надежнее искать
+по id или slug:
+
+const medical = subjects.find(
+  (subject) => subject.slug === "medical-training",
+);
+
+const currentModule = medical?.modules.find(
+  (module) => module.id === "medical-m4",
+);
+
+
+4. ПОЛЯ ПРЕДМЕТА И КАРТОЧКА В КАТАЛОГЕ
+---------------------------------------
+
+Каждый subject имеет следующую структуру:
+
+subject.id
+  Внутренний ID. В mock это "medical", "firearms", "rhb" и т.д.
+
+subject.code
+  Номер на карточке: "01", "02", ... "07".
+
+subject.slug
+  Человекочитаемая часть URL, например "medical-training".
+  Подходит для маршрута /subjects/medical-training.
+
+subject.title
+  Название карточки: "Медицинская подготовка".
+
+subject.subtitle
+  Подпись карточки: "Первая помощь • алгоритмы".
+
+subject.theme
+  Цветовой вариант карточки: "blue" или "olive".
+  Его удобно передавать в clsx:
+
+  className={clsx(styles.card, styles[subject.theme])}
+
+subject.position
+  Порядок предмета в каталоге.
+
+subject.estimatedMinutes
+  Примерная общая длительность предмета в минутах.
+
+subject.modules
+  Массив модулей этого предмета.
+
+subject.status
+  "not_started" — не начат;
+  "in_progress" — в процессе;
+  "completed" — завершен.
+
+subject.progressPercent
+  Число от 0 до 100 для progress bar.
+
+subject.lastScore
+  Последний балл пользователя или null, если результатов еще нет.
+
+Для карточки предмета из Figma нужны главным образом:
+
+subject.code
+subject.title
+subject.subtitle
+subject.modules.length
+subject.progressPercent
+subject.status
+subject.theme
+
+
+5. МОДУЛИ ВНУТРИ ПРЕДМЕТА
+--------------------------
+
+const medical = await learningRepository.getSubjectBySlug(
+  "medical-training",
+);
+
+const modules = medical?.modules ?? [];
+
+Текущий медицинский модуль:
+
+const module = medical?.modules.find(
+  (item) => item.id === "medical-m4",
+);
+
+В mock это четвертый модуль:
+
+ID:                 medical-m4
+number:             4
+title:              Оценка ситуации и принятие решений
+summary:            Тест + свободный ответ
+status:             in_progress
+progressPercent:    58
+estimatedMinutes:   47
+
+Поля module:
+
+module.id
+  ID модуля. Он связывает модуль с activities и используется в маршруте.
+
+module.subjectId
+  ID родительского предмета.
+
+module.number
+  Порядковый номер модуля.
+
+module.title
+  Полное название модуля для страницы программы предмета.
+
+module.summary
+  Короткая подпись: "Теория + тест", "Тест" и т.д.
+
+module.estimatedMinutes
+  Время прохождения в минутах или null.
+
+module.objective
+  Цель модуля для теоретической страницы.
+
+module.keyPrinciple
+  Выделенный ключевой принцип.
+
+module.shortSummary
+  Краткое резюме материала.
+
+module.learningTip
+  Совет учащемуся.
+
+module.sections
+  Разделы теории. У каждого есть id, title, body и position.
+
+module.activities
+  Теория, тесты и свободные ответы внутри модуля.
+
+module.status и module.progressPercent
+  Состояние модуля и процент для его progress bar.
+
+Если тебе нужно найти любой модуль сразу по ID:
+
+const module = await learningRepository.getModule("medical-m4");
+
+
+6. ACTIVITIES — ЗАДАНИЯ ВНУТРИ МОДУЛЯ
+-------------------------------------
+
+module.activities содержит разные виды учебной активности.
+
+activity.type === "theory"
+  Теоретическая часть.
+
+activity.type === "quiz"
+  Тест с вопросами и вариантами ответов.
+
+activity.type === "free_answer"
+  Задание с развернутым ответом и критериями оценки.
+
+Общие поля любой activity:
+
+activity.id
+activity.moduleId
+activity.type
+activity.title
+activity.description
+activity.position
+activity.estimatedMinutes
+
+У текущего medical-m4 массив activities выглядит так:
+
+activities[0]
+  id: medical-m4-theory
+  type: theory
+  title: Теория
+
+activities[1]
+  id: medical-m4-quiz
+  type: quiz
+  title: Проверка знаний
+  Это следующее задание из dashboard.continueLearning.nextActivityId.
+
+activities[2]
+  id: medical-m4-free-answer-1
+  type: free_answer
+  title: Развернутый ответ
+
+activities[3]
+  id: medical-m4-free-answer-2
+  type: free_answer
+  title: Практический сценарий
+
+Чтобы получить следующее задание полностью:
+
+const dashboard = await learningRepository.getDashboard();
+const nextActivityId = dashboard.continueLearning?.nextActivityId;
+
+const nextActivity = nextActivityId
+  ? subjects
+      .flatMap((subject) => subject.modules)
+      .flatMap((module) => module.activities)
+      .find((activity) => activity.id === nextActivityId)
+  : null;
+
+Для теста еще удобнее вызвать специальный метод:
+
+const quiz = nextActivityId
+  ? await learningRepository.getQuiz(nextActivityId)
+  : null;
+
+
+7. СТРАНИЦА ТЕОРИИ
+------------------
+
+Для страницы теории получи весь модуль:
+
+const module = await learningRepository.getModule("medical-m4");
+
+В интерфейс выводятся:
+
+Заголовок страницы              -> module.title
+Цель модуля                     -> module.objective
+Ключевой принцип                -> module.keyPrinciple
+Основной текст                  -> module.sections
+Краткое резюме                  -> module.shortSummary
+Совет                           -> module.learningTip
+Время                           -> activity.estimatedMinutes
+Прогресс                        -> module.progressPercent
+
+Пример вывода разделов:
+
+module?.sections.map((section) => (
+  <section key={section.id}>
+    <h2>{section.title}</h2>
+    <p>{section.body}</p>
+  </section>
+));
+
+
+8. СТРАНИЦА ТЕСТА
+-----------------
+
+const quiz = await learningRepository.getQuiz("medical-m4-quiz");
+
+Поля теста:
+
+quiz.title
+  Заголовок теста.
+
+quiz.description
+  Подпись теста.
+
+quiz.estimatedMinutes
+  Примерное время.
+
+quiz.questions
+  Массив вопросов. У текущего подробного теста 10 вопросов.
+
+Поля вопроса:
+
+question.id
+question.prompt          — текст вопроса;
+question.instructions    — инструкция «Выберите один вариант»;
+question.hint            — подсказка или null;
+question.position        — номер вопроса;
+question.options         — варианты ответа.
+
+Поля варианта ответа:
+
+option.id
+option.label             — A, B, C, D;
+option.text              — текст варианта.
+
+Правильного ответа во фронтенд-объекте НЕТ специально. Пользователь не должен
+получать ключи теста в браузер. Позднее отправляем выбранный option.id на бэкенд,
+а оценивание выполняет сервер или Supabase Edge Function.
+
+
+9. СТРАНИЦА СВОБОДНОГО ОТВЕТА
+------------------------------
+
+const task = await learningRepository.getFreeAnswer(
+  "medical-m4-free-answer-1",
+);
+
+Поля:
+
+task.title
+task.description
+task.prompt              — сам вопрос;
+task.instructions        — инструкция пользователю;
+task.maxLength           — максимум 2000 символов;
+task.estimatedMinutes
+task.criteria            — критерии будущей проверки.
+
+Критерии текущего задания:
+
+Полнота ответа       — 40%
+Логика изложения     — 30%
+Ключевые понятия     — 30%
+
+Сохранение черновика в mock:
+
+await learningRepository.saveFreeAnswerDraft(
+  task.id,
+  answer,
+);
+
+После подключения авторизации Supabase нужно передавать user.id:
+
+await learningRepository.saveFreeAnswerDraft(
+  task.id,
+  answer,
+  user.id,
+);
+
+
+10. ГЛАВНАЯ СТРАНИЦА / DASHBOARD
+--------------------------------
+
+const dashboard = await learningRepository.getDashboard();
+
+Верхние карточки статистики:
+
+dashboard.stats.subjectsStarted     // Начато предметов: 7
+dashboard.stats.averageScore        // Средний результат: 68
+dashboard.stats.quizzesCompleted    // Пройдено тестов: 12
+dashboard.stats.needsReview         // Нужно повторить: 3
+
+Карточка «Продолжить обучение»:
+
+dashboard.continueLearning
+
+Блок «Сегодня»:
+
+dashboard.todayPlan
+
+У каждого элемента плана:
+
+item.id
+item.title
+item.estimatedMinutes
+item.isCompleted
+item.activityId
+
+Текущий mock-план:
+
+1. Повторить РХБ защиту — 10 минут — выполнено.
+2. Пройти тест по топографии — 15 минут — не выполнено.
+3. Развернутый ответ: медицина — 20 минут — не выполнено.
+
+Карточки предметов на главной:
+
+dashboard.featuredSubjects
+
+Сейчас там:
+
+Огневая подготовка
+РХБ защита
+Военная топография
+
+
+11. СТРАНИЦА РЕЗУЛЬТАТА
+-----------------------
+
+const results = await learningRepository.getResults();
+const result = results[0];
+
+Поля result:
+
+result.id
+result.activityId
+result.activityType
+result.score                  — текущий пример: 82;
+result.statusLabel            — «Хороший результат»;
+result.summary
+result.submittedAnswer
+result.criterionScores
+result.aiFeedback
+result.completedAt
+
+Поля AI feedback:
+
+result.aiFeedback?.strength
+result.aiFeedback?.improvement
+result.aiFeedback?.recommendation
+
+После Supabase и авторизации:
+
+const results = await learningRepository.getResults(user.id);
+
+
+12. КАК НАЙТИ ТЕКУЩИЙ МОДУЛЬ ТОЛЬКО ЧЕРЕЗ subjects
+--------------------------------------------------
+
+Иногда это полезно, но для главной страницы проще использовать continueLearning.
+
+const currentSubject = subjects.find((subject) =>
+  subject.modules.some((module) => module.status === "in_progress"),
+);
+
+const currentModule = currentSubject?.modules.find(
+  (module) => module.status === "in_progress",
+);
+
+const firstUnfinishedActivity = currentModule?.activities.find(
+  (activity) => {
+    // Сейчас activity не содержит собственный status в интерфейсной модели.
+    // Поэтому надежный nextActivity уже подготовлен в dashboard.continueLearning.
+    return activity.id === dashboard.continueLearning?.nextActivityId;
+  },
+);
+
+Почему не стоит просто брать activities[1]: порядок может измениться, а в
+другом модуле вторым элементом может быть не тот экран, который нужен конкретному
+пользователю. nextActivityId — более надежная связь.
+
+
+13. ВАЖНО ПРИ ПОДКЛЮЧЕНИИ НАСТОЯЩЕГО ПОЛЬЗОВАТЕЛЯ
+-------------------------------------------------
+
+Mock хранит состояние одного демонстрационного пользователя и игнорирует userId.
+Поэтому сейчас можно вызывать методы без аргумента.
+
+Supabase хранит личный прогресс отдельно. После авторизации нужно вызывать:
+
+const subjects = await learningRepository.getSubjects(user.id);
+const dashboard = await learningRepository.getDashboard(user.id);
+const results = await learningRepository.getResults(user.id);
+
+Без user.id Supabase вернет общий учебный каталог, но личный прогресс будет
+нулевым, continueLearning будет null, а персональный план — пустым.
+
+
+14. КАК ЗАГРУЖАТЬ ДАННЫЕ В СТРАНИЦЕ REACT ROUTER
+------------------------------------------------
+
+Лучше не выполнять await на верхнем уровне файла компонента. Используй
+clientLoader страницы:
+
+export async function clientLoader() {
+  const [dashboard, subjects] = await Promise.all([
+    learningRepository.getDashboard(),
+    learningRepository.getSubjects(),
+  ]);
+
+  return { dashboard, subjects };
+}
+
+export default function Home({ loaderData }: Route.ComponentProps) {
+  const { dashboard, subjects } = loaderData;
+
+  return <main>{/* твоя верстка */}</main>;
+}
+
+
+15. ГДЕ МЕНЯТЬ ДАННЫЕ
+---------------------
+
+Пробные тексты, прогресс и результаты:
+app/data/repositories/mock-learning.repository.ts
+
+Структура TypeScript-объектов:
+app/data/types.ts
+
+Список доступных методов:
+app/data/repositories/learning.repository.ts
+
+Преобразование данных Supabase в объекты интерфейса:
+app/data/repositories/supabase-learning.repository.ts
+
+Структура таблиц PostgreSQL:
+supabase/migrations/202608150002_portal_content_and_assessments.sql
+
+Начальное наполнение PostgreSQL:
+supabase/seed.sql
+
+Автоматический выбор mock или Supabase:
+app/data/learning.ts
+
+
+КРАТКАЯ ШПАРГАЛКА
+=================
+
+Каталог предметов:
+await learningRepository.getSubjects();
+
+Вся главная страница:
+await learningRepository.getDashboard();
+
+Текущий модуль:
+(await learningRepository.getDashboard()).continueLearning
+
+Следующее задание:
+(await learningRepository.getDashboard()).continueLearning?.nextActivityId
+
+Один предмет:
+await learningRepository.getSubjectBySlug("medical-training");
+
+Один модуль:
+await learningRepository.getModule("medical-m4");
+
+Тест:
+await learningRepository.getQuiz("medical-m4-quiz");
+
+Свободный ответ:
+await learningRepository.getFreeAnswer("medical-m4-free-answer-1");
+
+Результаты:
+await learningRepository.getResults();

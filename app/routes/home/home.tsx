@@ -1,43 +1,36 @@
-import { Link } from "react-router";
-import { SideBarItem } from "~/components/SideBarItem/SideBarItem";
-
+import { IconArea } from "~/secondApp/components/IconArea/IconArea";
 import type { Route } from "./+types/home";
-import styles from "./home.module.scss";
+import { ContinueCard } from "~/secondApp/components/ContinueCard/ContinueCard";
+import { learningRepository } from "~/data/learning";
+import { StartCard } from "~/secondApp/components/StartCard/StartCard";
+import { TodayPlan } from "~/secondApp/components/TodayPlan/TodayPlan";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Motivator — двигайся к важному" },
-    {
-      name: "description",
-      content: "Стартовая страница проекта Motivator.",
-    },
+    { title: "Motivator" },
+    { name: "description", content: "Motivator web application" },
   ];
 }
 
+const dashboard = await learningRepository.getDashboard();
+const current = dashboard.continueLearning;
+const todayPlan = dashboard.todayPlan;
+
 export default function Home() {
+  console.log(dashboard);
   return (
-    <section className={styles.hero}>
-      <SideBarItem
-        value="66484"
-        fontSize="50px"
-        backgroundColor="transparent"
-        borderColor="#963214"
-        height="70px"
-        width="40px"
+    <main>
+      <ContinueCard
+        nameSubject={current?.subjectTitle}
+        contuniueQuest={current?.nextActivityTitle}
+        nameModule={current?.moduleTitle}
+        firstSerialNumber={current?.moduleNumber}
+        secondSerialNumber={current?.modulesTotal}
+        percent={current?.progressPercent ?? 0}
       />
-      <p className="eyebrow">Новый старт</p>
-      <h1>
-        Маленькие шаги.
-        <br />
-        Большие изменения.
-      </h1>
-      <p className={styles.lead}>
-        Каркас готов. Теперь можно сосредоточиться на продукте, а не на
-        настройке сборки.
-      </p>
-      <Link className="button" to="/about">
-        Посмотреть структуру
-      </Link>
-    </section>
+
+      <StartCard count="74" smallText="хуй знает что"/>
+      <TodayPlan items={todayPlan}/>
+    </main>
   );
 }
