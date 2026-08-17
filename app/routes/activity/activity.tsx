@@ -36,9 +36,11 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   for (const subject of subjects) {
     const module = subject.modules.find((item) => item.id === activity.moduleId);
     if (module) {
-      return quiz
-        ? { kind: "quiz" as const, activity: quiz, subject, module }
-        : { kind: "free_answer" as const, activity: freeAnswer!, subject, module };
+      if (quiz) return { kind: "quiz" as const, activity: quiz, subject, module };
+      const isUnlocked = await learningRepository.isFreeAnswerUnlocked(freeAnswer!.id, userId);
+      return isUnlocked
+        ? { kind: "free_answer" as const, activity: freeAnswer!, subject, module }
+        : { kind: "locked_free_answer" as const, activity: freeAnswer!, subject, module };
     }
   }
 
@@ -63,6 +65,34 @@ function AssessmentHeader({
       <span>{counter}</span>
       <ProgressTrack value={progress} />
     </header>
+  );
+}
+
+function LockedFreeAnswerView({ subject, module }: ActivityContext) {
+  const quiz = module.activities.find((activity) => activity.type === "quiz");
+
+  return (
+    <main className={styles.page}>
+      <AssessmentHeader
+        subject={subject}
+        title="Развернутый ответ"
+        counter="Задание пока недоступно"
+        progress={0}
+      />
+      <section className={styles.lockedActivity}>
+        <span>Задание заблокировано</span>
+        <h2>Сначала завершите тест модуля</h2>
+        <p>
+          После ответа на последний вопрос и отправки теста здесь откроется поле
+          для развернутого ответа.
+        </p>
+        {quiz ? (
+          <Button text="Перейти к тесту" to={`/activities/${quiz.id}`} />
+        ) : (
+          <Button text="Вернуться к модулю" to={`/modules/${module.id}`} />
+        )}
+      </section>
+    </main>
   );
 }
 
@@ -223,6 +253,7 @@ function FreeAnswerView({ activity, subject, module }: ActivityContext & { activ
   const [saveStatus, setSaveStatus] = useState("Черновик ещё не сохранён");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSafeToSend, setIsSafeToSend] = useState(false);
 
   const freeAnswers = useMemo(
     () => module.activities.filter((item): item is FreeAnswerActivity => item.type === "free_answer"),
@@ -256,6 +287,10 @@ function FreeAnswerView({ activity, subject, module }: ActivityContext & { activ
   async function submitAnswer() {
     if (answer.trim().length < 20) {
       setError("Добавьте больше деталей: минимум 20 символов.");
+      return;
+    }
+    if (!isSafeToSend) {
+      setError("Подтвердите, что ответ не содержит служебных и персональных сведений.");
       return;
     }
     setError("");
@@ -300,10 +335,25 @@ function FreeAnswerView({ activity, subject, module }: ActivityContext & { activ
             <strong>{answer.length} / {activity.maxLength}</strong>
           </div>
 
+          <label className={styles.dataConfirmation}>
+            <input
+              type="checkbox"
+              checked={isSafeToSend}
+              onChange={(event) => {
+                setIsSafeToSend(event.target.checked);
+                setError("");
+              }}
+            />
+            <span>
+              Подтверждаю, что ответ не содержит подразделение, место службы, ВУС,
+              реальные координаты, персональные данные и иные служебные сведения.
+            </span>
+          </label>
+
           {error && <p className={styles.error} role="alert">{error}</p>}
           <div className={styles.actions}>
             <Button text="Сохранить черновик" variant="secondary" onClick={saveDraft} />
-            <Button text={isSubmitting ? "Отправляем…" : "Отправить на проверку"} disabled={isSubmitting} onClick={submitAnswer} />
+            <Button text={isSubmitting ? "Отправляем…" : "Отправить на проверку"} disabled={isSubmitting || !isSafeToSend} onClick={submitAnswer} />
           </div>
           <p className={styles.afterSubmit}>После отправки ответ будет проанализирован по указанным критериям.</p>
         </section>
@@ -346,6 +396,8 @@ export default function Activity({ loaderData }: Route.ComponentProps) {
       <AppShell>
         {loaderData.kind === "quiz" ? (
           <QuizView activity={loaderData.activity} subject={loaderData.subject} module={loaderData.module} />
+        ) : loaderData.kind === "locked_free_answer" ? (
+          <LockedFreeAnswerView subject={loaderData.subject} module={loaderData.module} />
         ) : (
           <FreeAnswerView activity={loaderData.activity} subject={loaderData.subject} module={loaderData.module} />
         )}

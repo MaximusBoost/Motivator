@@ -351,6 +351,7 @@ const results: AssessmentResult[] = [
     id: "result-medical-free-answer-1",
     activityId: medicalFreeAnswer.id,
     activityType: "free_answer",
+    reviewStatus: "completed",
     score: 82,
     statusLabel: "Хороший результат",
     summary:
@@ -405,6 +406,7 @@ const demoGoals: SubjectGoal[] = [
 
 type StoredMockState = {
   activityProgress: Record<string, number>;
+  activityTouchedAt: Record<string, string>;
   results: AssessmentResult[];
   todayPlanCompletion: Record<string, boolean>;
   goals: Record<string, TargetGrade>;
@@ -415,6 +417,7 @@ type StoredMockState = {
 
 const emptyMockState: StoredMockState = {
   activityProgress: {},
+  activityTouchedAt: {},
   results: [],
   todayPlanCompletion: {},
   goals: {},
@@ -436,6 +439,7 @@ function readMockState(userId: string): StoredMockState {
     const parsed = JSON.parse(raw) as Partial<StoredMockState>;
     return {
       activityProgress: parsed.activityProgress ?? {},
+      activityTouchedAt: parsed.activityTouchedAt ?? {},
       results: parsed.results ?? [],
       todayPlanCompletion: parsed.todayPlanCompletion ?? {},
       goals: parsed.goals ?? {},
@@ -535,6 +539,7 @@ function storeResult(userId: string, result: AssessmentResult) {
   const state = readMockState(userId);
   state.results = [result, ...state.results.filter((item) => item.id !== result.id)];
   state.activityProgress[result.activityId] = 100;
+  state.activityTouchedAt[result.activityId] = result.completedAt;
   writeMockState(userId, state);
 }
 
@@ -548,14 +553,58 @@ export const mockLearningRepository: LearningRepository = {
     const state = readMockState(userId);
     const userResults = userId === "demo-user" ? [...state.results, ...results] : state.results;
     const scores = userResults.map((result) => result.score).filter((score) => score > 0);
-    const currentSubject = userSubjects.find((subject) => subject.status === "in_progress") ?? null;
-    const currentModule = currentSubject?.modules.find((module) => module.status === "in_progress") ??
-      currentSubject?.modules.find((module) => module.status === "not_started") ??
+    const latestTouchedActivityId = Object.entries(state.activityTouchedAt)
+      .reduce<[string, string] | null>((latest, entry) => {
+        return !latest || entry[1] >= latest[1] ? entry : latest;
+      }, null)?.[0];
+    const latestStoredResult = state.results.reduce<AssessmentResult | null>((latest, result) => {
+      return !latest || result.completedAt > latest.completedAt ? result : latest;
+    }, null);
+    const legacyProgressActivityId = Object.keys(state.activityProgress).at(-1);
+    const latestDemoResult = userId === "demo-user"
+      ? results.reduce<AssessmentResult | null>((latest, result) => {
+          return !latest || result.completedAt > latest.completedAt ? result : latest;
+        }, null)
+      : null;
+    const latestActivityId = latestTouchedActivityId ??
+      legacyProgressActivityId ??
+      latestStoredResult?.activityId ??
+      latestDemoResult?.activityId;
+    const latestContext = userSubjects.flatMap((subject) =>
+      subject.modules.flatMap((module) =>
+        module.activities
+          .filter((activity) => activity.id === latestActivityId)
+          .map((activity) => ({ subject, module, activity })),
+      ),
+    )[0] ?? null;
+    const currentSubject = latestContext?.subject ??
+      userSubjects.find((subject) => subject.status === "in_progress") ??
       null;
-    const nextActivity = currentModule?.activities.find((activity) => {
-      const fallbackProgress = currentModule.progressPercent > 0 && activity.type === "theory" ? 100 : 0;
-      return (state.activityProgress[activity.id] ?? fallbackProgress) < 100;
+    const completedActivityIds = new Set(
+      userResults
+        .filter((result) => result.reviewStatus === "completed")
+        .map((result) => result.activityId),
+    );
+    const findNextActivity = (module: LearningModule) => module.activities.find((activity) => {
+      const fallbackProgress = module.progressPercent > 0 && activity.type === "theory" ? 100 : 0;
+      return !completedActivityIds.has(activity.id) &&
+        (state.activityProgress[activity.id] ?? fallbackProgress) < 100;
     }) ?? null;
+    const latestModuleIndex = currentSubject && latestContext?.subject.id === currentSubject.id
+      ? currentSubject.modules.findIndex((module) => module.id === latestContext.module.id)
+      : -1;
+    const moduleCandidates = currentSubject
+      ? latestModuleIndex >= 0
+        ? [
+            ...currentSubject.modules.slice(latestModuleIndex),
+            ...currentSubject.modules.slice(0, latestModuleIndex),
+          ]
+        : currentSubject.modules
+      : [];
+    const currentModule = moduleCandidates.find((module) => findNextActivity(module)) ??
+      latestContext?.module ??
+      null;
+    const nextActivity = currentModule ? findNextActivity(currentModule) : null;
     const featuredSubjects = userSubjects
       .filter((subject) => subject.id !== currentSubject?.id && subject.status === "in_progress")
       .slice(0, 3);
@@ -578,6 +627,7 @@ export const mockLearningRepository: LearningRepository = {
         modulesTotal: currentSubject.modules.length,
         moduleTitle: currentModule.title,
         nextActivityId: nextActivity.id,
+        nextActivityType: nextActivity.type,
         nextActivityTitle: nextActivity.description ?? nextActivity.title,
         progressPercent: currentSubject.progressPercent,
       } : null,
@@ -613,6 +663,26 @@ export const mockLearningRepository: LearningRepository = {
     return clone(findFreeAnswerActivity(activityId));
   },
 
+  async isFreeAnswerUnlocked(activityId, userId = "demo-user") {
+    const activity = findFreeAnswerActivity(activityId);
+    if (!activity) return false;
+
+    const module = subjects
+      .flatMap((subject) => subject.modules)
+      .find((item) => item.id === activity.moduleId);
+    const quizIds = module?.activities
+      .filter((item) => item.type === "quiz")
+      .map((item) => item.id) ?? [];
+    if (quizIds.length === 0) return false;
+
+    const completedQuizIds = new Set(
+      (await this.getResults(userId))
+        .filter((result) => result.activityType === "quiz" && result.reviewStatus === "completed")
+        .map((result) => result.activityId),
+    );
+    return quizIds.every((quizId) => completedQuizIds.has(quizId));
+  },
+
   async getResults(userId = "demo-user") {
     const storedResults = readMockState(userId).results;
     return clone(userId === "demo-user" ? [...storedResults, ...results] : storedResults);
@@ -640,6 +710,7 @@ export const mockLearningRepository: LearningRepository = {
       id: createResultId("quiz"),
       activityId,
       activityType: "quiz",
+      reviewStatus: "completed",
       score,
       statusLabel:
         score >= 90 ? "Отличный результат" :
@@ -659,6 +730,9 @@ export const mockLearningRepository: LearningRepository = {
   async submitFreeAnswer(activityId, answer, userId = "demo-user") {
     const activity = findFreeAnswerActivity(activityId);
     if (!activity) throw new Error("Задание со свободным ответом не найдено.");
+    if (!(await this.isFreeAnswerUnlocked(activityId, userId))) {
+      throw new Error("Сначала завершите тест модуля.");
+    }
 
     const normalized = answer.trim().toLocaleLowerCase("ru");
     if (normalized.length < 20) throw new Error("Добавьте больше деталей: минимум 20 символов.");
@@ -699,6 +773,7 @@ export const mockLearningRepository: LearningRepository = {
       id: createResultId("free-answer"),
       activityId,
       activityType: "free_answer",
+      reviewStatus: "completed",
       score,
       statusLabel: "Предварительный результат",
       summary: "В demo-режиме выполнена локальная проверка структуры и ключевых понятий. После подключения ИИ результат будет формироваться на сервере.",
@@ -711,6 +786,24 @@ export const mockLearningRepository: LearningRepository = {
     return clone(result);
   },
 
+  async requestFreeAnswerReview(attemptId, userId = "demo-user") {
+    const result = await this.getResult(attemptId, userId);
+    if (!result) throw new Error("Ответ для проверки не найден.");
+    return result;
+  },
+
+  async startActivity(activityId, userId = "demo-user") {
+    const activityExists = subjects.some((subject) => subject.modules.some((module) =>
+      module.activities.some((activity) => activity.id === activityId),
+    ));
+    if (!activityExists) throw new Error("Учебная активность не найдена.");
+
+    const state = readMockState(userId);
+    state.activityProgress[activityId] = Math.max(1, state.activityProgress[activityId] ?? 0);
+    state.activityTouchedAt[activityId] = new Date().toISOString();
+    writeMockState(userId, state);
+  },
+
   async completeTheory(activityId, userId = "demo-user") {
     const theoryExists = subjects.some((subject) => subject.modules.some((module) =>
       module.activities.some((activity) => activity.id === activityId && activity.type === "theory"),
@@ -719,6 +812,7 @@ export const mockLearningRepository: LearningRepository = {
 
     const state = readMockState(userId);
     state.activityProgress[activityId] = 100;
+    state.activityTouchedAt[activityId] = new Date().toISOString();
     writeMockState(userId, state);
   },
 
@@ -729,6 +823,7 @@ export const mockLearningRepository: LearningRepository = {
       99,
       Math.max(0, Math.round(answeredCount * 100 / Math.max(1, totalQuestions))),
     );
+    state.activityTouchedAt[activityId] = new Date().toISOString();
     writeMockState(userId, state);
   },
 
@@ -770,7 +865,13 @@ export const mockLearningRepository: LearningRepository = {
   },
 
   async saveFreeAnswerDraft(activityId, answer, userId = "demo-user") {
+    if (!(await this.isFreeAnswerUnlocked(activityId, userId))) {
+      throw new Error("Сначала завершите тест модуля.");
+    }
     drafts.set(`${userId}:${activityId}`, answer);
+    const state = readMockState(userId);
+    state.activityTouchedAt[activityId] = new Date().toISOString();
+    writeMockState(userId, state);
     return {
       activityId,
       answer,
@@ -939,6 +1040,14 @@ export const mockLearningRepository: LearningRepository = {
       generatedAt: latest.updatedAt,
     };
     return clone(advice);
+  },
+
+  async requestPhysicalTrainingAdvice(resultId, userId = "demo-user") {
+    const result = readMockState(userId).practiceResults.find((item) => item.id === resultId);
+    if (!result || result.category !== "physical") {
+      throw new Error("Результат физической подготовки не найден.");
+    }
+    return this.getPhysicalTrainingAdvice(userId);
   },
 
   async savePracticeResult(input, userId = "demo-user") {

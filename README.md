@@ -116,8 +116,9 @@ to the browser; both ordinary and qualification tests are scored in PostgreSQL.
 
 Free answers are stored with `submitted` status and can be reviewed by
 `supabase/functions/review-free-answer`; physical results can trigger
-`supabase/functions/advise-physical-training`. Both functions use server-only
-`AI_PROVIDER_URL` and `AI_PROVIDER_API_KEY` secrets; see
+`supabase/functions/advise-physical-training`. Both functions use the shared
+OpenAI Responses API adapter with strict Structured Outputs and the server-only
+`OPENAI_API_KEY` secret; the model is configurable with `OPENAI_MODEL`. See
 [docs/ai-review.md](docs/ai-review.md). The current qualification result is a
 training forecast, not an official assessment or award.
 

@@ -241,6 +241,18 @@
   font-size: 12px;
 }
 
+.activityActions {
+  display: grid;
+  gap: 10px;
+}
+
+.lockHint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .actionError {
   margin: 12px 0 0;
   color: #8f2f2f;

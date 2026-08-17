@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import type { Route } from "./+types/module";
@@ -24,35 +24,59 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   if (!module) throw new Response("Модуль не найден", { status: 404 });
   const subject = subjects.find((item) => item.id === module.subjectId);
   if (!subject) throw new Response("Предмет не найден", { status: 404 });
-  return { module, subject };
+  const freeAnswerAccess = Object.fromEntries(
+    await Promise.all(
+      module.activities
+        .filter((activity) => activity.type === "free_answer")
+        .map(async (activity) => [
+          activity.id,
+          await learningRepository.isFreeAnswerUnlocked(activity.id, userId),
+        ] as const),
+    ),
+  );
+  return { module, subject, freeAnswerAccess };
 }
 
-export default function Module({ loaderData: { module, subject } }: Route.ComponentProps) {
+export default function Module({
+  loaderData: { module, subject, freeAnswerAccess },
+}: Route.ComponentProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [isCompleting, setIsCompleting] = useState(false);
+  const [openingActivityId, setOpeningActivityId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const theory = module.activities.find((activity) => activity.type === "theory");
   const quizzes = module.activities.filter((activity) => activity.type === "quiz");
   const freeAnswers = module.activities.filter((activity) => activity.type === "free_answer");
+  const isFreeAnswerUnlocked = freeAnswers[0]
+    ? freeAnswerAccess[freeAnswers[0].id] ?? false
+    : false;
   const questionCount = quizzes.reduce((total, quiz) => total + quiz.questions.length, 0);
-  const nextActivity = quizzes[0] ?? freeAnswers[0];
 
   const objective = module.objective ??
     "Изучить ключевые понятия модуля, закрепить последовательность действий и проверить понимание материала.";
   const keyPrinciple = module.keyPrinciple ??
     "Сначала разберитесь в исходных условиях, затем применяйте изученный алгоритм.";
 
-  async function handleContinue() {
-    if (!nextActivity) return;
-    setIsCompleting(true);
+  useEffect(() => {
+    if (!theory || !user) return;
+    void learningRepository.startActivity(theory.id, user.id).catch((caughtError: unknown) => {
+      setActionError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Не удалось запомнить текущий предмет.",
+      );
+    });
+  }, [theory, user]);
+
+  async function handleContinue(activityId: string) {
+    setOpeningActivityId(activityId);
     setActionError("");
     try {
       if (theory) await learningRepository.completeTheory(theory.id, user?.id);
-      navigate(`/activities/${nextActivity.id}`);
+      navigate(`/activities/${activityId}`);
     } catch (caughtError) {
       setActionError(caughtError instanceof Error ? caughtError.message : "Не удалось обновить прогресс.");
-      setIsCompleting(false);
+      setOpeningActivityId(null);
     }
   }
 
@@ -136,19 +160,45 @@ export default function Module({ loaderData: { module, subject } }: Route.Compon
                 <ul>
                   <li>Теория</li>
                   {questionCount > 0 && <li>{questionCount} тестовых вопросов</li>}
-                  {freeAnswers.length > 0 && <li>{freeAnswers.length} свободных ответов</li>}
+                  {freeAnswers.length > 0 && <li>Развернутый ответ</li>}
                 </ul>
                 <div className={styles.readProgress}>
                   <span>Материал прочитан</span>
                   <ProgressTrack value={module.progressPercent} />
                 </div>
-                {nextActivity ? (
-                  <Button
-                    text={isCompleting ? "Сохраняем…" : quizzes.length > 0 ? "Перейти к тесту" : "Перейти к заданию"}
-                    onClick={handleContinue}
-                    disabled={isCompleting}
-                    fullWidth
-                  />
+                {quizzes.length > 0 || freeAnswers.length > 0 ? (
+                  <div className={styles.activityActions}>
+                    {quizzes[0] && (
+                      <Button
+                        text={openingActivityId === quizzes[0].id ? "Открываем…" : "Перейти к тесту"}
+                        onClick={() => void handleContinue(quizzes[0].id)}
+                        disabled={openingActivityId !== null}
+                        fullWidth
+                      />
+                    )}
+                    {freeAnswers[0] && (
+                      <>
+                        <Button
+                          text={
+                            !isFreeAnswerUnlocked
+                              ? "Сначала завершите тест"
+                              : openingActivityId === freeAnswers[0].id
+                                ? "Открываем…"
+                                : "Дать развернутый ответ"
+                          }
+                          onClick={() => void handleContinue(freeAnswers[0].id)}
+                          disabled={openingActivityId !== null || !isFreeAnswerUnlocked}
+                          variant={quizzes.length > 0 ? "secondary" : "primary"}
+                          fullWidth
+                        />
+                        {!isFreeAnswerUnlocked && (
+                          <p className={styles.lockHint}>
+                            Развернутый ответ откроется после завершения теста модуля.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <Button text="Проверка скоро появится" disabled fullWidth />
                 )}

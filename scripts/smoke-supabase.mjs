@@ -295,22 +295,64 @@ async function main() {
     assertNoError(rubricCount.error, "read free-answer rubrics as service role");
     assert.equal(rubricCount.count, 7, "Seed must contain seven server-only rubrics");
 
-    const quizQuery = await admin
+    const freeAnswerQuery = await admin
       .from("learning_activities")
-      .select("id")
-      .eq("type", "quiz")
+      .select("id,module_id")
+      .eq("type", "free_answer")
       .eq("is_published", true)
       .limit(1)
       .single();
-    assertNoError(quizQuery.error, "select ordinary quiz");
-    const quizAnswers = await getCorrectAnswers(admin, quizQuery.data.id);
+    assertNoError(freeAnswerQuery.error, "select free-answer activity");
 
-    const quizSubmission = await learner.rpc("submit_quiz", {
-      p_activity_id: quizQuery.data.id,
-      p_answers: quizAnswers,
+    const lockedAccess = await learner.rpc("is_free_answer_unlocked", {
+      p_activity_id: freeAnswerQuery.data.id,
     });
-    assertNoError(quizSubmission.error, "submit ordinary quiz");
-    assert.equal(quizSubmission.data?.[0]?.score, 100, "Server must grade correct quiz as 100%");
+    assertNoError(lockedAccess.error, "check locked free-answer activity");
+    assert.equal(lockedAccess.data, false, "Free answer must start locked");
+
+    const blockedAttempt = await learner.from("activity_attempts").insert({
+      user_id: learnerId,
+      activity_id: freeAnswerQuery.data.id,
+      status: "draft",
+    });
+    assert.ok(blockedAttempt.error, "RLS must block a premature free-answer attempt");
+
+    const moduleQuizzes = await admin
+      .from("learning_activities")
+      .select("id")
+      .eq("module_id", freeAnswerQuery.data.module_id)
+      .eq("type", "quiz")
+      .eq("is_published", true)
+      .order("position");
+    assertNoError(moduleQuizzes.error, "select prerequisite module quizzes");
+    assert.ok(moduleQuizzes.data.length, "Free-answer module must contain a quiz");
+
+    for (const quiz of moduleQuizzes.data) {
+      const quizAnswers = await getCorrectAnswers(admin, quiz.id);
+      const quizSubmission = await learner.rpc("submit_quiz", {
+        p_activity_id: quiz.id,
+        p_answers: quizAnswers,
+      });
+      assertNoError(quizSubmission.error, "submit prerequisite module quiz");
+      assert.equal(quizSubmission.data?.[0]?.score, 100, "Server must grade correct quiz as 100%");
+    }
+
+    const unlockedAccess = await learner.rpc("is_free_answer_unlocked", {
+      p_activity_id: freeAnswerQuery.data.id,
+    });
+    assertNoError(unlockedAccess.error, "check unlocked free-answer activity");
+    assert.equal(unlockedAccess.data, true, "Free answer must unlock after module quizzes");
+
+    const allowedAttempt = await learner
+      .from("activity_attempts")
+      .insert({
+        user_id: learnerId,
+        activity_id: freeAnswerQuery.data.id,
+        status: "draft",
+      })
+      .select("id")
+      .single();
+    assertNoError(allowedAttempt.error, "create unlocked free-answer attempt");
 
     const examInput = await getQualificationAnswers(admin, subjectsQuery.data.slice(0, 4));
     const examSubmission = await learner.rpc("submit_qualification_exam", {
@@ -348,7 +390,7 @@ async function main() {
     assert.equal(foreignAttempt.data, null, "RLS must hide another user's exam result");
 
     assert.notEqual(learnerId, outsiderId);
-    console.log("Supabase smoke passed: Auth, seed, RLS, quiz RPC and qualification RPC.");
+    console.log("Supabase smoke passed: Auth, seed, RLS, gated free answer and qualification RPC.");
   } finally {
     await learner.auth.signOut();
     await outsider.auth.signOut();

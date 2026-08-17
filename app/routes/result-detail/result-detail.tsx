@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
+import { useRevalidator } from "react-router";
+
 import type { Route } from "./+types/result-detail";
 import { AppShell } from "~/components/AppShell/AppShell";
 import { learningRepository } from "~/data/learning";
-import { getCurrentUserId } from "~/features/auth/AuthProvider";
+import { getCurrentUserId, useAuth } from "~/features/auth/AuthProvider";
 import { RequireAuth } from "~/features/auth/RequireAuth";
 import { Button } from "~/secondApp/components/Button/Button";
 import { ProgressTrack } from "~/secondApp/components/ProgressTrack/ProgressTrack";
@@ -23,17 +26,61 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   for (const subject of subjects) {
     for (const module of subject.modules) {
       const activity = module.activities.find((item) => item.id === result.activityId);
-      if (activity) return { result, subject, module, activity };
+      if (activity) {
+        const assessments = module.activities.filter((item) => item.type !== "theory");
+        const activityIndex = assessments.findIndex((item) => item.id === activity.id);
+        let nextActivity = activityIndex >= 0 ? assessments[activityIndex + 1] ?? null : null;
+        if (
+          nextActivity?.type === "free_answer" &&
+          !(await learningRepository.isFreeAnswerUnlocked(nextActivity.id, userId))
+        ) {
+          nextActivity = null;
+        }
+        return { result, subject, module, activity, nextActivity };
+      }
     }
   }
 
-  return { result, subject: null, module: null, activity: null };
+  return { result, subject: null, module: null, activity: null, nextActivity: null };
 }
 
 export default function ResultDetail({
-  loaderData: { result, subject, module, activity },
+  loaderData: { result, subject, module, activity, nextActivity },
 }: Route.ComponentProps) {
-  const isReviewing = result.score === 0 && result.statusLabel === "Ответ отправлен";
+  const { user } = useAuth();
+  const revalidator = useRevalidator();
+  const [pollCount, setPollCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const isReviewing = result.activityType === "free_answer" && result.reviewStatus !== "completed";
+
+  useEffect(() => {
+    if (!isReviewing || pollCount >= 12) return;
+    const timer = window.setTimeout(() => {
+      if (revalidator.state === "idle") {
+        revalidator.revalidate();
+        setPollCount((current) => current + 1);
+      }
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [isReviewing, pollCount, revalidator]);
+
+  async function retryReview() {
+    if (!user) return;
+    setIsRetrying(true);
+    setReviewError("");
+    try {
+      await learningRepository.requestFreeAnswerReview(result.id, user.id);
+      setPollCount(0);
+      revalidator.revalidate();
+    } catch (caughtError) {
+      setReviewError(
+        caughtError instanceof Error ? caughtError.message : "Не удалось запустить проверку.",
+      );
+    } finally {
+      setIsRetrying(false);
+    }
+  }
 
   return (
     <RequireAuth>
@@ -53,10 +100,34 @@ export default function ResultDetail({
             </div>
             <p>{result.summary}</p>
             <div className={styles.summaryActions}>
+              {isReviewing && (
+                <Button
+                  text={isRetrying
+                    ? "Запускаем…"
+                    : result.reviewStatus === "reviewing"
+                      ? "Проверка выполняется…"
+                      : "Повторить проверку"}
+                  onClick={() => void retryReview()}
+                  disabled={isRetrying || result.reviewStatus === "reviewing"}
+                  variant="secondary"
+                  fullWidth
+                />
+              )}
+              {!isReviewing && nextActivity && (
+                <Button
+                  text={nextActivity.type === "free_answer"
+                    ? "Перейти к развернутому ответу"
+                    : "Перейти к следующему тесту"}
+                  to={`/activities/${nextActivity.id}`}
+                  fullWidth
+                />
+              )}
               {module && <Button text="Повторить тему" to={`/modules/${module.id}`} variant="secondary" fullWidth />}
               <Button text="К предметам" to="/subjects" fullWidth />
             </div>
           </section>
+
+          {reviewError && <p className={styles.reviewError} role="alert">{reviewError}</p>}
 
           {(result.criterionScores.length > 0 || result.aiFeedback) && (
             <div className={styles.feedbackGrid}>
@@ -93,7 +164,9 @@ export default function ResultDetail({
               <p>{result.submittedAnswer}</p>
               <footer>
                 {isReviewing
-                  ? "Ответ сохранён • проверка ожидается"
+                  ? result.reviewStatus === "reviewing"
+                    ? "Ответ сохранён • AI-проверка выполняется"
+                    : "Ответ сохранён • проверку можно повторить"
                   : "Проверено автоматически • результат сохранён в профиле"}
               </footer>
             </section>

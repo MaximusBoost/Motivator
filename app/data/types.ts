@@ -146,6 +146,7 @@ export type ContinueLearning = {
   modulesTotal: number;
   moduleTitle: string;
   nextActivityId: Identifier;
+  nextActivityType: ActivityType;
   nextActivityTitle: string;
   progressPercent: number;
 };
@@ -173,6 +174,7 @@ export type AssessmentResult = {
   id: Identifier;
   activityId: Identifier;
   activityType: "quiz" | "free_answer";
+  reviewStatus: AttemptStatus;
   score: number;
   statusLabel: string;
   summary: string;

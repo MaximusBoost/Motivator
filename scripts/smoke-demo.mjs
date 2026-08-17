@@ -159,6 +159,34 @@ try {
   }));
   assert(correctLabels.size === 4, "Correct answers must be distributed across A-D");
 
+  const recentlyStudiedSubject = subjects.find((subject) => subject.id === "topography");
+  const recentlyStartedQuiz = recentlyStudiedSubject?.modules
+    .flatMap((module) => module.activities)
+    .find((activity) => activity.type === "quiz");
+  assert(recentlyStudiedSubject && recentlyStartedQuiz, "Recent-subject fixture is missing");
+  await repository.saveQuizProgress(
+    recentlyStartedQuiz.id,
+    1,
+    recentlyStartedQuiz.questions.length,
+    userId,
+  );
+  const recentDashboard = await repository.getDashboard(userId);
+  assert(
+    recentDashboard.continueLearning?.subjectId === recentlyStudiedSubject.id,
+    "Dashboard must continue the most recently studied subject",
+  );
+  const openedSubject = subjects.find((subject) => subject.id === "regulations");
+  const openedTheory = openedSubject?.modules
+    .flatMap((module) => module.activities)
+    .find((activity) => activity.type === "theory");
+  assert(openedSubject && openedTheory, "Opened-subject fixture is missing");
+  await repository.startActivity(openedTheory.id, userId);
+  const dashboardAfterOpeningTheory = await repository.getDashboard(userId);
+  assert(
+    dashboardAfterOpeningTheory.continueLearning?.subjectId === openedSubject.id,
+    "Opening theory must make its subject the current dashboard subject",
+  );
+
   await assertRejects(
     () => repository.savePracticeResult({
       category: "physical",
@@ -228,9 +256,28 @@ try {
   assert(examResult.qualifiesForTarget, "Perfect qualification exam did not reach target");
   assert(examResult.subjectResults.every((result) => result.grade === 5), "Perfect answers must grade as 5");
 
-  const ordinaryQuiz = subjects[0].modules
-    .flatMap((module) => module.activities)
-    .find((activity) => activity.type === "quiz");
+  const freeAnswerModule = subjects[0].modules.find((module) =>
+    module.activities.some((activity) => activity.type === "free_answer"),
+  );
+  assert(freeAnswerModule, "Module with a free-answer activity is missing");
+  const freeAnswer = freeAnswerModule.activities.find(
+    (activity) => activity.type === "free_answer",
+  );
+  assert(freeAnswer, "Free-answer activity is missing");
+  assert(
+    !(await repository.isFreeAnswerUnlocked(freeAnswer.id, userId)),
+    "Free answer must be locked before the module quiz",
+  );
+  await assertRejects(
+    () => repository.submitFreeAnswer(
+      freeAnswer.id,
+      "Сначала оцениваю условия и риски, затем определяю приоритет и проверяю решение.",
+      userId,
+    ),
+    "Free answer submission must be rejected before the module quiz",
+  );
+
+  const ordinaryQuiz = freeAnswerModule.activities.find((activity) => activity.type === "quiz");
   assert(ordinaryQuiz, "Ordinary quiz is missing");
   const quizAnswers = Object.fromEntries(ordinaryQuiz.questions.map((question) => [
     question.id,
@@ -238,11 +285,10 @@ try {
   ]));
   const quizResult = await repository.submitQuiz(ordinaryQuiz.id, quizAnswers, userId);
   assert(quizResult.score === 100, "Ordinary quiz scoring failed");
-
-  const freeAnswer = subjects[0].modules
-    .flatMap((module) => module.activities)
-    .find((activity) => activity.type === "free_answer");
-  assert(freeAnswer, "Free-answer activity is missing");
+  assert(
+    await repository.isFreeAnswerUnlocked(freeAnswer.id, userId),
+    "Free answer must unlock after the module quiz",
+  );
   const freeResult = await repository.submitFreeAnswer(
     freeAnswer.id,
     "Сначала оцениваю условия и риски, затем определяю приоритет и проверяю решение.",

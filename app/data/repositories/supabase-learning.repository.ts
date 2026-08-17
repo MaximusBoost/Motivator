@@ -85,6 +85,11 @@ function average(values: number[]): number {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+function timestampValue(value: string | null | undefined): number {
+  const timestamp = value ? Date.parse(value) : Number.NaN;
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
 function mapQualificationProfile(
   row: Row<"user_qualification_profiles">,
 ): QualificationProfile {
@@ -428,8 +433,7 @@ async function getDashboard(userId?: string): Promise<DashboardData> {
     client
       .from("activity_attempts")
       .select("*")
-      .eq("user_id", userId)
-      .eq("status", "completed"),
+      .eq("user_id", userId),
     client
       .from("daily_plan_items")
       .select("*")
@@ -442,28 +446,67 @@ async function getDashboard(userId?: string): Promise<DashboardData> {
       .eq("user_id", userId),
   ]);
   const attempts = dataOrThrow("activity_attempts", attemptResult);
+  const completedAttempts = attempts.filter((attempt) => attempt.status === "completed");
   const planRows = dataOrThrow("daily_plan_items", planResult);
   const progressRows = dataOrThrow("user_activity_progress", progressResult);
   const progressByActivity = new Map(
     progressRows.map((progress) => [progress.activity_id, progress] as const),
   );
-  const activityById = new Map(
+  const activityContextById = new Map(
     subjects.flatMap((subject) =>
       subject.modules.flatMap((module) =>
-        module.activities.map((activity) => [activity.id, activity] as const),
+        module.activities.map((activity) => [
+          activity.id,
+          { subject, module, activity },
+        ] as const),
       ),
     ),
   );
-  const scores = attempts.flatMap((attempt) =>
+  const scores = completedAttempts.flatMap((attempt) =>
     attempt.score === null ? [] : [attempt.score],
   );
-  const currentSubject =
-    subjects.find((subject) => subject.status === "in_progress") ?? null;
-  const currentModule =
-    currentSubject?.modules.find((module) => module.status !== "completed") ?? null;
-  const nextActivity = currentModule?.activities.find(
-    (activity) => progressByActivity.get(activity.id)?.status !== "completed",
+  const latestActivity = [
+    ...progressRows.map((progress) => ({
+      activityId: progress.activity_id,
+      touchedAt: timestampValue(progress.updated_at),
+    })),
+    ...attempts.map((attempt) => ({
+      activityId: attempt.activity_id,
+      touchedAt: timestampValue(attempt.submitted_at ?? attempt.started_at),
+    })),
+  ].reduce<{ activityId: string; touchedAt: number } | null>((latest, entry) => {
+    return !latest || entry.touchedAt > latest.touchedAt ? entry : latest;
+  }, null);
+  const latestContext = latestActivity
+    ? activityContextById.get(latestActivity.activityId) ?? null
+    : null;
+  const currentSubject = latestContext?.subject ??
+    subjects.find((subject) => subject.status === "in_progress") ??
+    null;
+  const completedActivityIds = new Set([
+    ...progressRows
+      .filter((progress) => progress.status === "completed")
+      .map((progress) => progress.activity_id),
+    ...completedAttempts.map((attempt) => attempt.activity_id),
+  ]);
+  const findNextActivity = (module: LearningModule) => module.activities.find(
+    (activity) => !completedActivityIds.has(activity.id),
   ) ?? null;
+  const latestModuleIndex = currentSubject && latestContext?.subject.id === currentSubject.id
+    ? currentSubject.modules.findIndex((module) => module.id === latestContext.module.id)
+    : -1;
+  const moduleCandidates = currentSubject
+    ? latestModuleIndex >= 0
+      ? [
+          ...currentSubject.modules.slice(latestModuleIndex),
+          ...currentSubject.modules.slice(0, latestModuleIndex),
+        ]
+      : currentSubject.modules
+    : [];
+  const currentModule = moduleCandidates.find((module) => findNextActivity(module)) ??
+    latestContext?.module ??
+    null;
+  const nextActivity = currentModule ? findNextActivity(currentModule) : null;
   const featuredSubjects = subjects
     .filter((subject) => subject.status === "in_progress")
     .slice(0, 3);
@@ -478,6 +521,7 @@ async function getDashboard(userId?: string): Promise<DashboardData> {
           modulesTotal: currentSubject.modules.length,
           moduleTitle: currentModule.title,
           nextActivityId: nextActivity.id,
+          nextActivityType: nextActivity.type,
           nextActivityTitle: nextActivity.description ?? nextActivity.title,
           progressPercent: currentSubject.progressPercent,
         }
@@ -488,10 +532,10 @@ async function getDashboard(userId?: string): Promise<DashboardData> {
       subjectsStarted: subjects.filter((subject) => subject.status !== "not_started")
         .length,
       averageScore: average(scores),
-      quizzesCompleted: attempts.filter(
-        (attempt) => activityById.get(attempt.activity_id)?.type === "quiz",
+      quizzesCompleted: completedAttempts.filter(
+        (attempt) => activityContextById.get(attempt.activity_id)?.activity.type === "quiz",
       ).length,
-      needsReview: attempts.filter(
+      needsReview: completedAttempts.filter(
         (attempt) => attempt.score !== null && attempt.score < 70,
       ).length,
     },
@@ -593,6 +637,14 @@ export const supabaseLearningRepository: LearningRepository = {
     return activity?.type === "free_answer" ? activity : null;
   },
 
+  async isFreeAnswerUnlocked(activityId, userId) {
+    if (!userId) return false;
+    const result = await getSupabaseClient().rpc("is_free_answer_unlocked", {
+      p_activity_id: activityId,
+    });
+    return dataOrThrow("is_free_answer_unlocked", result);
+  },
+
   async getResults(userId) {
     if (!userId) return [];
 
@@ -646,6 +698,7 @@ export const supabaseLearningRepository: LearningRepository = {
           id: attempt.id,
           activityId: activity.id,
           activityType: activity.type,
+          reviewStatus: "completed",
           score: attempt.score,
           statusLabel: attempt.result_label ?? "Результат готов",
           summary: attempt.result_summary ?? "Проверка завершена.",
@@ -703,9 +756,12 @@ export const supabaseLearningRepository: LearningRepository = {
       id: attempt.id,
       activityId: attempt.activity_id,
       activityType: "free_answer",
+      reviewStatus: attempt.status,
       score: attempt.score ?? 0,
-      statusLabel: "Ответ отправлен",
-      summary: "Ответ сохранён и ожидает серверной проверки. Результат появится здесь после завершения анализа.",
+      statusLabel: attempt.status === "reviewing" ? "ИИ проверяет ответ" : "Ответ отправлен",
+      summary: attempt.status === "reviewing"
+        ? "Сервер сверяет ответ с теорией и критериями. Страница обновится автоматически."
+        : "Ответ сохранён. Если автоматическая проверка не началась, её можно запустить повторно.",
       submittedAnswer: submissionResult.data?.answer ?? null,
       criterionScores: [],
       aiFeedback: null,
@@ -729,6 +785,7 @@ export const supabaseLearningRepository: LearningRepository = {
       id: row.attempt_id,
       activityId,
       activityType: "quiz",
+      reviewStatus: "completed",
       score: row.score,
       statusLabel:
         row.score >= 90 ? "Отличный результат" :
@@ -745,6 +802,9 @@ export const supabaseLearningRepository: LearningRepository = {
 
   async submitFreeAnswer(activityId, answer, userId) {
     if (!userId) throw new Error("Для отправки ответа необходимо войти.");
+    if (!(await this.isFreeAnswerUnlocked(activityId, userId))) {
+      throw new Error("Сначала завершите тест модуля.");
+    }
     const activity = findActivity(await getSubjects(userId), activityId);
     if (activity?.type !== "free_answer") {
       throw new Error("Задание со свободным ответом не найдено.");
@@ -809,14 +869,62 @@ export const supabaseLearningRepository: LearningRepository = {
       id: attempt.id,
       activityId,
       activityType: "free_answer",
+      reviewStatus: "submitted",
       score: 0,
       statusLabel: "Ответ отправлен",
-      summary: "Ответ ожидает серверной проверки. После подключения AI-функции здесь появятся балл и рекомендации.",
+      summary: "Ответ сохранён, серверная AI-проверка запущена. Балл и рекомендации появятся на странице результата.",
       submittedAnswer: answer.trim(),
       criterionScores: [],
       aiFeedback: null,
       completedAt: submittedAt,
     };
+  },
+
+  async requestFreeAnswerReview(attemptId, userId) {
+    if (!userId) throw new Error("Для проверки ответа необходимо войти.");
+    const client = getSupabaseClient();
+    const invocation = await client.functions.invoke("review-free-answer", {
+      body: { attemptId },
+    });
+    if (invocation.error) {
+      throw new Error("Проверка временно недоступна. Ответ сохранён — попробуйте ещё раз позже.");
+    }
+    const result = await this.getResult(attemptId, userId);
+    if (!result) throw new Error("Сохранённый ответ не найден.");
+    return result;
+  },
+
+  async startActivity(activityId, userId) {
+    if (!userId) throw new Error("Для начала обучения необходимо войти.");
+    const client = getSupabaseClient();
+    const existingResult = await client
+      .from("user_activity_progress")
+      .select("status,progress_percent")
+      .eq("user_id", userId)
+      .eq("activity_id", activityId)
+      .maybeSingle();
+    if (existingResult.error) {
+      throw new Error(`Не удалось загрузить прогресс: ${existingResult.error.message}`);
+    }
+
+    const progress = existingResult.data;
+    const isCompleted = progress?.status === "completed";
+    const result = await client
+      .from("user_activity_progress")
+      .upsert(
+        {
+          user_id: userId,
+          activity_id: activityId,
+          status: isCompleted ? "completed" : "in_progress",
+          progress_percent: isCompleted
+            ? progress.progress_percent
+            : Math.max(1, progress?.progress_percent ?? 0),
+        },
+        { onConflict: "user_id,activity_id" },
+      );
+    if (result.error) {
+      throw new Error(`Не удалось отметить начало обучения: ${result.error.message}`);
+    }
   },
 
   async completeTheory(activityId, userId) {
@@ -1080,6 +1188,18 @@ export const supabaseLearningRepository: LearningRepository = {
     return result.data ? mapPhysicalTrainingAdvice(result.data) : null;
   },
 
+  async requestPhysicalTrainingAdvice(resultId, userId) {
+    if (!userId) throw new Error("Для получения рекомендации необходимо войти.");
+    const client = getSupabaseClient();
+    const invocation = await client.functions.invoke("advise-physical-training", {
+      body: { resultId },
+    });
+    if (invocation.error) {
+      throw new Error("AI-рекомендация временно недоступна. Результат сохранён.");
+    }
+    return this.getPhysicalTrainingAdvice(userId);
+  },
+
   async savePracticeResult(input, userId) {
     if (!userId) throw new Error("Для сохранения результата необходимо войти.");
     const client = getSupabaseClient();
@@ -1125,6 +1245,10 @@ export const supabaseLearningRepository: LearningRepository = {
       throw new Error("Для сохранения черновика нужен id авторизованного пользователя.");
     }
 
+    if (!(await this.isFreeAnswerUnlocked(activityId, userId))) {
+      throw new Error("Сначала завершите тест модуля.");
+    }
+
     const activity = findActivity(await getSubjects(), activityId);
     if (activity?.type !== "free_answer") {
       throw new Error("Задание со свободным ответом не найдено.");
@@ -1160,6 +1284,24 @@ export const supabaseLearningRepository: LearningRepository = {
       .select("*")
       .single();
     const submission = dataOrThrow("free_answer_submissions", savedSubmission);
+
+    const progressPercent = answer.trim().length === 0
+      ? 0
+      : Math.min(99, Math.max(1, Math.round(answer.trim().length * 100 / activity.maxLength)));
+    const progressResult = await client
+      .from("user_activity_progress")
+      .upsert(
+        {
+          user_id: userId,
+          activity_id: activityId,
+          status: progressPercent > 0 ? "in_progress" : "not_started",
+          progress_percent: progressPercent,
+        },
+        { onConflict: "user_id,activity_id" },
+      );
+    if (progressResult.error) {
+      throw new Error(`Не удалось обновить прогресс развернутого ответа: ${progressResult.error.message}`);
+    }
 
     return {
       activityId,

@@ -423,6 +423,12 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      is_free_answer_unlocked: {
+        Args: {
+          p_activity_id: string;
+        };
+        Returns: boolean;
+      };
       submit_quiz: {
         Args: {
           p_activity_id: string;

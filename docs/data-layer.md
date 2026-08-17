@@ -78,6 +78,14 @@ union, поэтому после проверки `activity.type` редакто
 не ключи. Итоговый балл, проверку ответа и AI feedback позднее должен записывать
 доверенный сервер или Supabase Edge Function, а не клиентское приложение.
 
+Развернутый ответ открывается только после завершения всех тестов того же
+модуля. Для проверки из интерфейса используется
+`learningRepository.isFreeAnswerUnlocked(activityId, userId)`. Это не только
+визуальная блокировка: функция PostgreSQL `is_free_answer_unlocked(...)` ищет
+завершённую сервером тестовую попытку, а RLS не позволяет создать черновик
+свободного ответа раньше. Правило добавлено миграцией
+`202608170003_free_answer_unlock.sql`.
+
 ## Учебный контент
 
 В mock и seed добавлены:
@@ -133,6 +141,12 @@ const results = await learningRepository.getResults(user.id);
 
 await learningRepository.saveFreeAnswerDraft(activityId, answer, user.id);
 ```
+
+`dashboard.continueLearning` выбирается по самой свежей учебной активности
+пользователя, а не по первому предмету со статусом `in_progress`. Учитываются
+открытие теоретического модуля, прогресс теста, отправленная попытка и работа с
+черновиком развернутого ответа. В mock время хранится в `activityTouchedAt`, а
+в Supabase используются `user_activity_progress.updated_at` и время попытки.
 
 Персональный маршрут использует тот же репозиторий:
 

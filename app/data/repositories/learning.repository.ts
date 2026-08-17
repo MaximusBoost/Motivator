@@ -25,6 +25,7 @@ export interface LearningRepository {
   getModule(moduleId: string, userId?: string): Promise<LearningModule | null>;
   getQuiz(activityId: string): Promise<QuizActivity | null>;
   getFreeAnswer(activityId: string): Promise<FreeAnswerActivity | null>;
+  isFreeAnswerUnlocked(activityId: string, userId?: string): Promise<boolean>;
   getResults(userId?: string): Promise<AssessmentResult[]>;
   getResult(attemptId: string, userId?: string): Promise<AssessmentResult | null>;
   submitQuiz(
@@ -37,6 +38,11 @@ export interface LearningRepository {
     answer: string,
     userId?: string,
   ): Promise<AssessmentResult>;
+  requestFreeAnswerReview(
+    attemptId: string,
+    userId?: string,
+  ): Promise<AssessmentResult>;
+  startActivity(activityId: string, userId?: string): Promise<void>;
   completeTheory(activityId: string, userId?: string): Promise<void>;
   saveQuizProgress(
     activityId: string,
@@ -74,6 +80,10 @@ export interface LearningRepository {
   ): Promise<QualificationExamResult | null>;
   getPracticeResults(userId?: string): Promise<PracticeResult[]>;
   getPhysicalTrainingAdvice(userId?: string): Promise<PhysicalTrainingAdvice | null>;
+  requestPhysicalTrainingAdvice(
+    resultId: string,
+    userId?: string,
+  ): Promise<PhysicalTrainingAdvice | null>;
   savePracticeResult(input: PracticeResultInput, userId?: string): Promise<PracticeResult>;
   deletePracticeResult(resultId: string, userId?: string): Promise<void>;
 }

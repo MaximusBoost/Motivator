@@ -32,6 +32,7 @@ export default function Practice({ loaderData: { subjects, results: initialResul
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isRequestingAdvice, setIsRequestingAdvice] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -62,7 +63,9 @@ export default function Practice({ loaderData: { subjects, results: initialResul
       setResults((current) => [result, ...current]);
       if (result.category === "physical") setAdvice(null);
       formElement.reset();
-      setStatus("Результат добавлен в маршрут.");
+      setStatus(result.category === "physical"
+        ? "Результат сохранён. AI-рекомендация формируется."
+        : "Результат добавлен в маршрут.");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Не удалось сохранить результат.");
     } finally {
@@ -104,7 +107,7 @@ export default function Practice({ loaderData: { subjects, results: initialResul
       } catch {
         // Результат сохранён даже при временно недоступном AI-провайдере.
       }
-      if (!cancelled && attempts < 4) timeoutId = setTimeout(() => void poll(), 1800);
+      if (!cancelled && attempts < 12) timeoutId = setTimeout(() => void poll(), 2500);
     };
 
     timeoutId = setTimeout(() => void poll(), 1000);
@@ -113,6 +116,29 @@ export default function Practice({ loaderData: { subjects, results: initialResul
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [activeAdvice, latestPhysical, user]);
+
+  async function requestAdvice() {
+    if (!user || !latestPhysical) return;
+    setIsRequestingAdvice(true);
+    setError("");
+    setStatus("");
+    try {
+      const nextAdvice = await learningRepository.requestPhysicalTrainingAdvice(
+        latestPhysical.id,
+        user.id,
+      );
+      if (nextAdvice?.basedOnResultId === latestPhysical.id) {
+        setAdvice(nextAdvice);
+        setStatus("AI-рекомендация готова.");
+      } else {
+        setStatus("Рекомендация формируется. Страница обновит её автоматически.");
+      }
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Не удалось получить рекомендацию.");
+    } finally {
+      setIsRequestingAdvice(false);
+    }
+  }
 
   return (
     <RequireAuth>
@@ -235,6 +261,17 @@ export default function Practice({ loaderData: { subjects, results: initialResul
                   <small>
                     {activeAdvice?.caution ?? "AI не ставит диагнозы и не заменяет специалиста или официальный план подготовки."}
                   </small>
+                  {latestPhysical && !activeAdvice && (
+                    <div className={styles.adviceAction}>
+                      <Button
+                        text={isRequestingAdvice ? "Формируем…" : "Запросить рекомендацию ещё раз"}
+                        type="button"
+                        variant="secondary"
+                        disabled={isRequestingAdvice}
+                        onClick={() => void requestAdvice()}
+                      />
+                    </div>
+                  )}
                 </div>
               </section>
 

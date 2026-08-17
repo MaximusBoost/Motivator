@@ -45,7 +45,14 @@ export function ContinueCard({ item }: ContinueCardProps) {
             </div>
           </div>
 
-          <Button text="Продолжить" to={`/activities/${item.nextActivityId}`} />
+          <Button
+            text="Продолжить"
+            to={
+              item.nextActivityType === "theory"
+                ? `/modules/${item.moduleId}`
+                : `/activities/${item.nextActivityId}`
+            }
+          />
         </div>
       </div>
     </article>

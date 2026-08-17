@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  AiProviderError,
+  generateStructuredJson,
+  readOpenAiConfig,
+} from "../_shared/openai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,10 +49,8 @@ Deno.serve(async (request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const providerUrl = Deno.env.get("AI_PROVIDER_URL") ?? Deno.env.get("AI_REVIEW_URL");
-    const providerKey = Deno.env.get("AI_PROVIDER_API_KEY") ?? Deno.env.get("AI_REVIEW_API_KEY");
     if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase server environment is incomplete");
-    if (!providerUrl || !providerKey) return jsonResponse({ error: "AI provider is not configured" }, 503);
+    const aiConfig = readOpenAiConfig(Deno.env.toObject());
 
     const authorization = request.headers.get("Authorization");
     if (!authorization) return jsonResponse({ error: "Authentication required" }, 401);
@@ -99,36 +102,51 @@ Deno.serve(async (request) => {
       .limit(5);
     if (historyError) throw historyError;
 
-    const providerResponse = await fetch(providerUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${providerKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        task: "advise_physical_training",
-        version: "1.0",
-        instructions: [
-          "Дай краткие, постепенные и безопасные рекомендации по общей физической подготовке.",
-          "Не ставь диагнозы, не назначай лечение и не формируй официальный план подготовки.",
-          "Не предлагай экстремальные нагрузки, наказания, допинг или действия через боль.",
-          "При признаках риска рекомендуй остановиться и обратиться к профильному специалисту.",
-          "Не запрашивай подразделение, место службы, ВУС, личность или иные служебные сведения.",
-          "Верни только JSON по указанной схеме.",
-        ],
-        latestResult: selectedResult,
-        recentResults: history ?? [],
-        responseSchema: {
-          summary: "string",
-          recommendations: ["1..5 short strings"],
-          caution: "string with safety limitation",
+    const generated = await generateStructuredJson<unknown>(aiConfig, {
+      schemaName: "physical_training_advice",
+      schema: {
+        type: "object",
+        properties: {
+          summary: { type: "string" },
+          recommendations: {
+            type: "array",
+            minItems: 1,
+            maxItems: 5,
+            items: { type: "string" },
+          },
+          caution: { type: "string" },
         },
-      }),
+        required: ["summary", "recommendations", "caution"],
+        additionalProperties: false,
+      },
+      systemPrompt: [
+        "Ты формируешь краткую учебную обратную связь по самостоятельно внесенным результатам физической подготовки.",
+        "Используй только переданные числовые результаты и оценки, не выдумывай возраст, пол, состояние здоровья или условия выполнения.",
+        "Предлагай постепенные и безопасные общие шаги, а не официальный индивидуальный план.",
+        "Не ставь диагнозы, не назначай лечение, препараты, экстремальные нагрузки, допинг или действия через боль.",
+        "Не интерпретируй заметки и не запрашивай подразделение, место службы, ВУС или личность.",
+        "При боли, резком ухудшении самочувствия или иных признаках риска рекомендуй прекратить нагрузку и обратиться к специалисту.",
+      ].join(" "),
+      payload: {
+        latestResult: {
+          title: selectedResult.title,
+          value: selectedResult.value,
+          unit: selectedResult.unit,
+          grade: selectedResult.grade,
+          performedAt: selectedResult.performed_at,
+        },
+        recentResults: (history ?? []).map((result) => ({
+          title: result.title,
+          value: result.value,
+          unit: result.unit,
+          grade: result.grade,
+          performedAt: result.performed_at,
+        })),
+      },
+      userId: userData.user.id,
+      maxOutputTokens: 1000,
     });
-    if (!providerResponse.ok) {
-      throw new Error(`AI provider failed with status ${providerResponse.status}`);
-    }
-    const advice = validateAdvice(await providerResponse.json());
+    const advice = validateAdvice(generated.data);
 
     const { data: savedAdvice, error: saveError } = await admin
       .from("physical_training_advice")
@@ -152,8 +170,27 @@ Deno.serve(async (request) => {
       adviceId: savedAdvice.id,
       resultId: selectedResult.id,
       generatedAt: savedAdvice.generated_at,
+      provider: generated.provider,
+      model: generated.model,
+      responseId: generated.responseId,
+      usage: generated.usage,
     });
   } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : "Advice generation failed" }, 500);
+    if (error instanceof AiProviderError) {
+      console.error("advise-physical-training provider error", {
+        code: error.code,
+        status: error.status,
+        requestId: error.requestId,
+      });
+      return jsonResponse({
+        error: error.code === "provider_not_configured"
+          ? "AI advice is not configured"
+          : "AI advice is temporarily unavailable",
+        code: error.code,
+        retryable: error.retryable,
+      }, error.code === "provider_not_configured" ? 503 : 502);
+    }
+    console.error("advise-physical-training failed", error);
+    return jsonResponse({ error: "Advice generation failed" }, 500);
   }
 });
