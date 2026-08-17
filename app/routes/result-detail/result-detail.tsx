@@ -139,6 +139,9 @@ export default function ResultDetail({
                       <span>{criterion.title}</span>
                       <strong>{criterion.score} / 100</strong>
                       <ProgressTrack value={criterion.score} color={index === 1 ? "olive" : "blue"} />
+                      {criterion.feedback && (
+                        <p className={styles.criterionFeedback}>{criterion.feedback}</p>
+                      )}
                     </div>
                   ))}
                 </section>

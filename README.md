@@ -26,6 +26,12 @@ npm run dev
 
 Open http://localhost:5173.
 
+When `.env.ai.local` contains GigaChat server credentials, `npm run dev` also
+starts the local `/api/ai/review-free-answer` endpoint and configures the
+trusted CA bundled in `certs/`. In mock-data mode, submitted free answers are
+checked by GigaChat against the server-side curriculum rubrics. The credentials
+never use a `VITE_` prefix and are not included in the browser bundle.
+
 Without `.env.local`, open `/login` and either register a browser-local test
 account or use **Open demo account**. With Supabase variables configured, the
 same forms use Supabase Auth (email + password) and store the unique username
@@ -121,6 +127,12 @@ OpenAI Responses API adapter with strict Structured Outputs and the server-only
 `OPENAI_API_KEY` secret; the model is configurable with `OPENAI_MODEL`. See
 [docs/ai-review.md](docs/ai-review.md). The current qualification result is a
 training forecast, not an official assessment or award.
+
+A separate real-provider smoke test is available for the planned GigaChat
+adapter. It keeps credentials server-only, discovers models available to the
+account and validates a forced structured review before the application is
+deployed. See [docs/gigachat-smoke.md](docs/gigachat-smoke.md) and run
+`npm run smoke:gigachat`.
 
 The product scope is limited to active service members. Onboarding requires an
 explicit confirmation and stores only a generalized service profile. Do not

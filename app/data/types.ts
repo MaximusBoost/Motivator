@@ -162,6 +162,7 @@ export type CriterionScore = {
   criterionId: Identifier;
   title: string;
   score: number;
+  feedback?: string | null;
 };
 
 export type AiFeedback = {

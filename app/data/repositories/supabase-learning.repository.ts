@@ -707,6 +707,7 @@ export const supabaseLearningRepository: LearningRepository = {
             criterionId: score.criterion_id,
             title: criteria.get(score.criterion_id)?.title ?? "Критерий",
             score: score.score,
+            feedback: score.feedback,
           })),
           aiFeedback:
             submission && hasAiFeedback

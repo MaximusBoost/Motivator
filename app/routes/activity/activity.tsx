@@ -353,7 +353,7 @@ function FreeAnswerView({ activity, subject, module }: ActivityContext & { activ
           {error && <p className={styles.error} role="alert">{error}</p>}
           <div className={styles.actions}>
             <Button text="Сохранить черновик" variant="secondary" onClick={saveDraft} />
-            <Button text={isSubmitting ? "Отправляем…" : "Отправить на проверку"} disabled={isSubmitting || !isSafeToSend} onClick={submitAnswer} />
+            <Button text={isSubmitting ? "GigaChat проверяет…" : "Отправить на проверку"} disabled={isSubmitting || !isSafeToSend} onClick={submitAnswer} />
           </div>
           <p className={styles.afterSubmit}>После отправки ответ будет проанализирован по указанным критериям.</p>
         </section>

@@ -28,6 +28,7 @@ import {
   type CurriculumModule,
   type SourceBasedSubjectId,
 } from "~/data/curriculum-content";
+import { requestLocalFreeAnswerReview } from "~/lib/ai/free-answer-review.client";
 import type { LearningRepository } from "./learning.repository";
 
 const optionTexts = [
@@ -38,7 +39,6 @@ const optionTexts = [
 ];
 
 const correctOptionByQuestionId = new Map<string, string>();
-const conceptsByFreeAnswerId = new Map<string, string[]>();
 
 function createGenericQuestions(activityId: string): QuizQuestion[] {
   return [1, 2, 3].map((position) => {
@@ -114,10 +114,6 @@ function createActivities(moduleId: string, content?: CurriculumModule): Learnin
 
   if (content?.freeAnswer) {
     const activityId = `${moduleId}-free-answer`;
-    const concepts = [...new Set(
-      content.freeAnswer.criteria.flatMap((criterion) => criterion.requiredConcepts),
-    )];
-    conceptsByFreeAnswerId.set(activityId, concepts);
     activities.push({
       id: activityId,
       moduleId,
@@ -734,52 +730,43 @@ export const mockLearningRepository: LearningRepository = {
       throw new Error("Сначала завершите тест модуля.");
     }
 
-    const normalized = answer.trim().toLocaleLowerCase("ru");
-    if (normalized.length < 20) throw new Error("Добавьте больше деталей: минимум 20 символов.");
+    const normalizedAnswer = answer.trim();
+    if (normalizedAnswer.length < 20) {
+      throw new Error("Добавьте больше деталей: минимум 20 символов.");
+    }
 
-    const completeness = Math.min(100, Math.max(45, Math.round(normalized.length / 4)));
-    const logic = Math.min(100, 55 + (normalized.includes("затем") ? 18 : 0) + (normalized.includes("после") ? 12 : 0));
-    const concepts = conceptsByFreeAnswerId.get(activityId) ?? [
-      "оценка",
-      "условия",
-      "действия",
-      "контроль",
-    ];
-    const matchedConcepts = concepts.filter((concept) => concept
-      .toLocaleLowerCase("ru")
-      .split(/\s+/)
-      .filter((word) => word.length >= 5)
-      .some((word) => normalized.includes(word.slice(0, Math.min(7, word.length))))
-    ).length;
-    const terms = Math.min(
-      100,
-      40 + Math.round(matchedConcepts * 60 / Math.max(1, concepts.length)),
+    const review = await requestLocalFreeAnswerReview(activityId, normalizedAnswer);
+    const reviewByCriterion = new Map(
+      review.criterionScores.map((criterion) => [criterion.criterionId, criterion]),
     );
-    const boundaries = Math.min(100, 55 + (normalized.includes("если") ? 15 : 0) + (normalized.includes("уточ") ? 15 : 0));
-    const scores = activity.criteria.map((criterion) => ({
-      criterionId: criterion.id,
-      title: criterion.title,
-      score:
-        criterion.position === 1 ? completeness :
-        criterion.position === 2 ? logic :
-        criterion.position === 3 ? terms : boundaries,
-    }));
-    const score = Math.round(scores.reduce((total, item, index) => {
-      const weight = activity.criteria[index]?.weightPercent ?? 0;
-      return total + item.score * weight / 100;
-    }, 0));
+    const scores = activity.criteria.map((criterion) => {
+      const reviewedCriterion = reviewByCriterion.get(criterion.id);
+      if (!reviewedCriterion) {
+        throw new Error(`GigaChat не вернул оценку по критерию «${criterion.title}».`);
+      }
+      return {
+        criterionId: criterion.id,
+        title: criterion.title,
+        score: reviewedCriterion.score,
+        feedback: reviewedCriterion.feedback,
+      };
+    });
 
     const result: AssessmentResult = {
       id: createResultId("free-answer"),
       activityId,
       activityType: "free_answer",
       reviewStatus: "completed",
-      score,
-      statusLabel: "Предварительный результат",
-      summary: "В demo-режиме выполнена локальная проверка структуры и ключевых понятий. После подключения ИИ результат будет формироваться на сервере.",
-      submittedAnswer: answer.trim(),
+      score: review.score,
+      statusLabel:
+        review.score >= 90 ? "Отличный результат" :
+        review.score >= 75 ? "Хороший результат" :
+        review.score >= 60 ? "Ответ принят" :
+        "Нужно повторить материал",
+      summary: review.summary,
+      submittedAnswer: normalizedAnswer,
       criterionScores: scores,
-      aiFeedback: null,
+      aiFeedback: review.feedback,
       completedAt: new Date().toISOString(),
     };
     storeResult(userId, result);

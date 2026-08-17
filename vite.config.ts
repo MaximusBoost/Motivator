@@ -1,9 +1,11 @@
 import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig } from "vite";
-import { reactClickToComponent } from 'vite-plugin-react-click-to-component'
+import { reactClickToComponent } from "vite-plugin-react-click-to-component";
+
+import { localAiPlugin } from "./server/local-ai-plugin.ts";
 
 export default defineConfig({
-  plugins: [reactRouter(), reactClickToComponent()],
+  plugins: [localAiPlugin(), reactRouter(), reactClickToComponent()],
   resolve: {
     tsconfigPaths: true,
   },

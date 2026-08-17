@@ -40,6 +40,35 @@ globalThis.window = {
   localStorage: new MemoryStorage(),
 };
 
+globalThis.fetch = async (url, init) => {
+  if (String(url) !== "/api/ai/review-free-answer") {
+    throw new Error(`Unexpected demo smoke request: ${String(url)}`);
+  }
+  const request = JSON.parse(String(init?.body ?? "{}"));
+  const criterionScores = [1, 2, 3, 4].map((position) => ({
+    criterionId: `${request.activityId}-criterion-${position}`,
+    score: 80 + position,
+    feedback: `Тестовый комментарий по критерию ${position}.`,
+  }));
+  return new Response(JSON.stringify({
+    activityId: request.activityId,
+    provider: "gigachat",
+    model: "GigaChat-test",
+    score: 83,
+    summary: "Тестовая серверная AI-проверка.",
+    criterionScores,
+    feedback: {
+      strength: "Тестовая сильная сторона.",
+      improvement: "Тестовое улучшение.",
+      recommendation: "Тестовая рекомендация.",
+    },
+    usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+  }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+};
+
 const vite = await createServer({
   appType: "custom",
   configFile: false,
@@ -294,7 +323,12 @@ try {
     "Сначала оцениваю условия и риски, затем определяю приоритет и проверяю решение.",
     userId,
   );
-  assert(freeResult.score > 0, "Demo free-answer check failed");
+  assert(freeResult.score === 83, "Demo free-answer API result was not stored");
+  assert(freeResult.aiFeedback?.strength, "Demo free-answer AI feedback is missing");
+  assert(
+    freeResult.criterionScores.every((criterion) => criterion.feedback),
+    "Demo criterion feedback is missing",
+  );
 
   const roadmap = await repository.getQualificationRoadmap(userId);
   assert(roadmap.profile?.targetQualification === "third", "Roadmap profile is missing");
