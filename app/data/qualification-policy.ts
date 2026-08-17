@@ -67,12 +67,22 @@ export function getNextQualificationLevel(
   return currentQualification;
 }
 
-export function isSequentialQualificationTarget(
+export function getAllowedQualificationTargets(
+  currentQualification: QualificationLevel,
+  serviceType: ServiceType,
+): Exclude<QualificationLevel, "none">[] {
+  const nextQualification = getNextQualificationLevel(currentQualification, serviceType);
+  if (currentQualification === "none") return [nextQualification];
+  if (currentQualification === nextQualification) return [nextQualification];
+  return [currentQualification, nextQualification];
+}
+
+export function isAllowedQualificationTarget(
   currentQualification: QualificationLevel,
   targetQualification: Exclude<QualificationLevel, "none">,
   serviceType: ServiceType,
 ): boolean {
-  return targetQualification === getNextQualificationLevel(currentQualification, serviceType);
+  return getAllowedQualificationTargets(currentQualification, serviceType).includes(targetQualification);
 }
 
 const gradeReadiness: Record<TargetGrade, number> = {
@@ -243,10 +253,10 @@ function getEligibility(profile: QualificationProfile): {
   label: string;
   isEligible: boolean;
 } {
-  if (reachesQualification(profile.currentQualification, profile.targetQualification)) {
+  if (profile.currentQualification === profile.targetQualification) {
     return {
       eligibleAt: profile.qualificationExpiresAt,
-      label: "Целевая классная квалификация уже достигнута.",
+      label: "Маршрут направлен на подготовку к подтверждению действующей классности.",
       isEligible: true,
     };
   }
@@ -377,17 +387,7 @@ export function buildQualificationRoadmap(input: {
   const predictedQualification = latestExam?.predictedQualification ?? "none";
   const targetReached = latestExam?.qualifiesForTarget ?? false;
   const blockers: string[] = [];
-  const nextQualification = getNextQualificationLevel(
-    input.profile.currentQualification,
-    input.profile.serviceType,
-  );
-
   if (!eligibility.isEligible) blockers.push(eligibility.label);
-  if (qualificationRank[input.profile.targetQualification] > qualificationRank[nextQualification]) {
-    blockers.push(
-      `Долгосрочная цель достигается поэтапно; ближайший этап — «${qualificationLabels[nextQualification]}».`,
-    );
-  }
   if (routeSubjects.filter((subject) => subject.readinessPercent >= 60).length < 4) {
     blockers.push("Подготовьте не менее четырёх базовых или профильных предметов до устойчивого уровня.");
   }

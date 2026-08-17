@@ -12,20 +12,36 @@ set target_qualification = case current_qualification
     else 'first'::public.qualification_level
   end
   when 'master' then 'master'::public.qualification_level
-end;
+end
+where not (
+  (current_qualification <> 'none' and target_qualification = current_qualification)
+  or target_qualification = case current_qualification
+    when 'none' then 'third'::public.qualification_level
+    when 'third' then 'second'::public.qualification_level
+    when 'second' then 'first'::public.qualification_level
+    when 'first' then case
+      when service_type = 'contract' then 'master'::public.qualification_level
+      else 'first'::public.qualification_level
+    end
+    when 'master' then 'master'::public.qualification_level
+  end
+);
 
 alter table public.user_qualification_profiles
   add constraint target_qualification_is_sequential check (
-    target_qualification = case current_qualification
-      when 'none' then 'third'::public.qualification_level
-      when 'third' then 'second'::public.qualification_level
-      when 'second' then 'first'::public.qualification_level
-      when 'first' then case
-        when service_type = 'contract' then 'master'::public.qualification_level
-        else 'first'::public.qualification_level
+    (current_qualification <> 'none' and target_qualification = current_qualification)
+    or (
+      target_qualification = case current_qualification
+        when 'none' then 'third'::public.qualification_level
+        when 'third' then 'second'::public.qualification_level
+        when 'second' then 'first'::public.qualification_level
+        when 'first' then case
+          when service_type = 'contract' then 'master'::public.qualification_level
+          else 'first'::public.qualification_level
+        end
+        when 'master' then 'master'::public.qualification_level
       end
-      when 'master' then 'master'::public.qualification_level
-    end
+    )
   );
 
 create type public.physical_sex as enum ('male', 'female');

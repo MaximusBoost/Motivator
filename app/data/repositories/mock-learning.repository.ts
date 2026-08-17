@@ -20,9 +20,9 @@ import {
   buildQualificationExamResult,
   buildQualificationRoadmap,
   gradeQualificationTest,
+  isAllowedQualificationTarget,
   getNextQualificationLevel,
   QUALIFICATION_POLICY_VERSION,
-  isSequentialQualificationTarget,
 } from "~/data/qualification-policy";
 import {
   assessPhysicalResults,
@@ -443,7 +443,11 @@ function readMockState(userId: string): StoredMockState {
     if (!raw) return clone(emptyMockState);
     const parsed = JSON.parse(raw) as Partial<StoredMockState>;
     const qualificationProfile = parsed.qualificationProfile ?? null;
-    if (qualificationProfile) {
+    if (qualificationProfile && !isAllowedQualificationTarget(
+      qualificationProfile.currentQualification,
+      qualificationProfile.targetQualification,
+      qualificationProfile.serviceType,
+    )) {
       qualificationProfile.targetQualification = getNextQualificationLevel(
         qualificationProfile.currentQualification,
         qualificationProfile.serviceType,
@@ -894,12 +898,12 @@ export const mockLearningRepository: LearningRepository = {
     if (input.serviceType === "conscript" && input.targetQualification === "master") {
       throw new Error("Для службы по призыву цель «Мастер» не предусмотрена.");
     }
-    if (!isSequentialQualificationTarget(
+    if (!isAllowedQualificationTarget(
       input.currentQualification,
       input.targetQualification,
       input.serviceType,
     )) {
-      throw new Error("Выберите ближайший последовательный квалификационный класс.");
+      throw new Error("Можно подтвердить текущую классность или выбрать следующий последовательный класс.");
     }
     if (!input.serviceStartedAt) throw new Error("Укажите дату начала службы.");
 

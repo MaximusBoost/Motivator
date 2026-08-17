@@ -117,6 +117,55 @@
   font-size: 24px;
 }
 
+.readinessContent {
+  min-width: 0;
+  flex: 1;
+}
+
+.readinessExplanation {
+  margin-top: 12px !important;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-default);
+  font-size: 11px !important;
+}
+
+.readinessFactors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.readinessFactors li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--color-surface-muted);
+}
+
+.readinessFactors li > span {
+  display: grid;
+  gap: 2px;
+  color: var(--color-text-primary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.readinessFactors small {
+  color: var(--color-text-secondary);
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.readinessFactors li > strong {
+  font-size: 11px;
+}
+
 .readinessRing {
   position: relative;
   display: grid;
@@ -492,6 +541,10 @@
   .readinessCard {
     flex-direction: column;
     padding: 20px;
+  }
+
+  .readinessFactors {
+    grid-template-columns: 1fr;
   }
 
   .physicalGoalCard {

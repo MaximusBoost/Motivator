@@ -126,6 +126,43 @@ try {
     "Conscript master target must be rejected",
   );
 
+  const qualificationChoiceUserId = "qualification-choice-user";
+  const qualificationChoiceProfile = {
+    isActiveServiceMember: true,
+    serviceType: "contract",
+    personnelCategory: "soldier",
+    positionProfile: "specialist",
+    hasSubordinates: false,
+    serviceDirection: "general",
+    serviceStartedAt: "2024-01-01",
+    currentQualification: "third",
+    qualificationAwardedAt: "2025-01-01",
+    qualificationExpiresAt: "2026-12-31",
+  };
+  await repository.saveQualificationProfile({
+    ...qualificationChoiceProfile,
+    targetQualification: "third",
+  }, qualificationChoiceUserId);
+  assert(
+    (await repository.getQualificationProfile(qualificationChoiceUserId))?.targetQualification === "third",
+    "Current qualification must be available as a confirmation target",
+  );
+  await repository.saveQualificationProfile({
+    ...qualificationChoiceProfile,
+    targetQualification: "second",
+  }, qualificationChoiceUserId);
+  assert(
+    (await repository.getQualificationProfile(qualificationChoiceUserId))?.targetQualification === "second",
+    "The next sequential qualification must be available as a target",
+  );
+  await assertRejects(
+    () => repository.saveQualificationProfile({
+      ...qualificationChoiceProfile,
+      targetQualification: "first",
+    }, qualificationChoiceUserId),
+    "Skipping a qualification level must be rejected",
+  );
+
   await repository.saveQualificationProfile({
     isActiveServiceMember: true,
     serviceType: "contract",

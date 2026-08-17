@@ -75,19 +75,31 @@
   gap: 20px;
 }
 
-.fieldGrid label:not(.checkbox) {
+.qualificationGrid {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px 20px;
 }
 
-.fieldGrid label > span {
+.fieldGrid label:not(.checkbox),
+.qualificationGrid label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fieldGrid label > span,
+.qualificationGrid label > span {
   color: var(--color-text-primary);
   font-size: 12px;
   font-weight: 650;
 }
 
 .fieldGrid input:not([type="checkbox"]),
-.fieldGrid select {
+.fieldGrid select,
+.qualificationGrid input,
+.qualificationGrid select {
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
@@ -98,9 +110,28 @@
 }
 
 .fieldGrid input:focus,
-.fieldGrid select:focus {
+.fieldGrid select:focus,
+.qualificationGrid input:focus,
+.qualificationGrid select:focus {
   border-color: var(--color-action-primary);
   outline: 3px solid rgb(45 95 135 / 12%);
+}
+
+.qualificationHint {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-subtle-blue);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.qualificationHint strong {
+  color: var(--color-text-primary);
 }
 
 .checkbox {
@@ -167,7 +198,12 @@
     padding: 30px 20px 48px;
   }
 
-  .fieldGrid {
+  .fieldGrid,
+  .qualificationGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .qualificationHint {
     grid-template-columns: 1fr;
   }
 }

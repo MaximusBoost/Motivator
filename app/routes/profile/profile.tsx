@@ -82,7 +82,7 @@ export default function Profile({ loaderData: { dashboard, goals, roadmap } }: R
               </h2>
               <p>
                 {roadmap.profile
-                  ? `${serviceDirectionLabels[roadmap.profile.serviceDirection]} · готовность ${roadmap.readinessPercent}%`
+                  ? `${serviceDirectionLabels[roadmap.profile.serviceDirection]} · индекс маршрута ${roadmap.readinessPercent}%`
                   : "Укажите только обобщённые сведения — без подразделения, ВУС и точной должности."}
               </p>
             </div>
@@ -110,7 +110,7 @@ export default function Profile({ loaderData: { dashboard, goals, roadmap } }: R
               />
             </section>
 
-            <section className={styles.securityCard}>
+            {/* <section className={styles.securityCard}>
               <h2>Безопасность MVP</h2>
               {isDemoMode ? (
                 <p>Локальный режим нужен для разработки интерфейса. Перед деплоем подключите `.env.local` и примените миграции Supabase.</p>
@@ -118,7 +118,7 @@ export default function Profile({ loaderData: { dashboard, goals, roadmap } }: R
                 <p>Пароль обрабатывается Supabase Auth и не хранится в таблице профиля или коде приложения.</p>
               )}
               <p>Service role key никогда не должен попадать в переменные `VITE_*`.</p>
-            </section>
+            </section> */}
           </div>
         </main>
       </AppShell>

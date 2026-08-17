@@ -17,9 +17,9 @@ import type {
 import {
   buildQualificationExamResult,
   buildQualificationRoadmap,
+  isAllowedQualificationTarget,
   getNextQualificationLevel,
   QUALIFICATION_POLICY_VERSION,
-  isSequentialQualificationTarget,
 } from "~/data/qualification-policy";
 import {
   calculateAge,
@@ -115,7 +115,13 @@ function mapQualificationProfile(
     currentQualification: row.current_qualification,
     qualificationAwardedAt: row.qualification_awarded_at,
     qualificationExpiresAt: row.qualification_expires_at,
-    targetQualification: getNextQualificationLevel(row.current_qualification, row.service_type),
+    targetQualification: isAllowedQualificationTarget(
+      row.current_qualification,
+      row.target_qualification,
+      row.service_type,
+    )
+      ? row.target_qualification
+      : getNextQualificationLevel(row.current_qualification, row.service_type),
     policyVersion: row.policy_version,
     onboardingCompletedAt: row.onboarding_completed_at,
     activeServiceConfirmedAt: row.active_service_confirmed_at,
@@ -1055,12 +1061,12 @@ export const supabaseLearningRepository: LearningRepository = {
     if (input.serviceType === "conscript" && input.targetQualification === "master") {
       throw new Error("Для службы по призыву цель «Мастер» не предусмотрена.");
     }
-    if (!isSequentialQualificationTarget(
+    if (!isAllowedQualificationTarget(
       input.currentQualification,
       input.targetQualification,
       input.serviceType,
     )) {
-      throw new Error("Выберите ближайший последовательный квалификационный класс.");
+      throw new Error("Можно подтвердить текущую классность или выбрать следующий последовательный класс.");
     }
     const client = getSupabaseClient();
     const result = await client

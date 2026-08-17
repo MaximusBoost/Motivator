@@ -4,7 +4,10 @@ import { useNavigate } from "react-router";
 import type { Route } from "./+types/onboarding";
 import { AppShell } from "~/components/AppShell/AppShell";
 import { learningRepository } from "~/data/learning";
-import { getNextQualificationLevel } from "~/data/qualification-policy";
+import {
+  getAllowedQualificationTargets,
+  getNextQualificationLevel,
+} from "~/data/qualification-policy";
 import type {
   PersonnelCategory,
   PositionProfile,
@@ -36,11 +39,19 @@ export async function clientLoader() {
 export default function Onboarding({ loaderData: profile }: Route.ComponentProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [serviceType, setServiceType] = useState<ServiceType>(profile?.serviceType ?? "contract");
+  const initialServiceType = profile?.serviceType ?? "contract";
+  const initialCurrentQualification = profile?.currentQualification ?? "none";
+  const [serviceType, setServiceType] = useState<ServiceType>(initialServiceType);
   const [currentQualification, setCurrentQualification] = useState<QualificationLevel>(
-    profile?.currentQualification ?? "none",
+    initialCurrentQualification,
   );
-  const targetQualification = getNextQualificationLevel(currentQualification, serviceType);
+  const [targetQualification, setTargetQualification] = useState<Exclude<QualificationLevel, "none">>(
+    profile && getAllowedQualificationTargets(initialCurrentQualification, initialServiceType)
+      .includes(profile.targetQualification)
+      ? profile.targetQualification
+      : getNextQualificationLevel(initialCurrentQualification, initialServiceType),
+  );
+  const allowedTargets = getAllowedQualificationTargets(currentQualification, serviceType);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -112,12 +123,17 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                     value={serviceType}
                     onChange={(event) => {
                       const nextType = event.target.value as ServiceType;
+                      const nextCurrent = nextType === "conscript" && currentQualification === "master"
+                        ? "none"
+                        : currentQualification;
                       setServiceType(nextType);
-                      if (nextType === "conscript") {
-                        if (currentQualification === "master") {
-                          setCurrentQualification("none");
-                        }
-                      }
+                      setCurrentQualification(nextCurrent);
+                      const nextAllowedTargets = getAllowedQualificationTargets(nextCurrent, nextType);
+                      setTargetQualification((currentTarget) =>
+                        nextAllowedTargets.includes(currentTarget)
+                          ? currentTarget
+                          : nextAllowedTargets.at(-1) ?? "third",
+                      );
                     }}
                   >
                     <option value="contract">По контракту</option>
@@ -188,7 +204,7 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                 </div>
               </div>
 
-              <div className={styles.fieldGrid}>
+              <div className={styles.qualificationGrid}>
                 <label>
                   <span>Текущая классная квалификация</span>
                   <select
@@ -197,6 +213,12 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                     onChange={(event) => {
                       const nextCurrent = event.target.value as QualificationLevel;
                       setCurrentQualification(nextCurrent);
+                      const nextAllowedTargets = getAllowedQualificationTargets(nextCurrent, serviceType);
+                      setTargetQualification((currentTarget) =>
+                        nextAllowedTargets.includes(currentTarget)
+                          ? currentTarget
+                          : nextAllowedTargets.at(-1) ?? "third",
+                      );
                     }}
                   >
                     <option value="none">Нет</option>
@@ -207,20 +229,19 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                 </label>
 
                 <label>
-                  <span>Целевая классная квалификация</span>
+                  <span>Цель маршрута</span>
                   <select
                     name="targetQualification"
                     value={targetQualification}
-                    disabled
+                    onChange={(event) => setTargetQualification(
+                      event.target.value as Exclude<QualificationLevel, "none">,
+                    )}
                     aria-describedby="target-qualification-note"
                   >
                     {qualificationOptions
-                      .filter((option) => option.value === targetQualification)
+                      .filter((option) => allowedTargets.includes(option.value))
                       .map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
-                  <small id="target-qualification-note">
-                    Ближайший этап определяется автоматически: 3-й → 2-й → 1-й → мастер.
-                  </small>
                 </label>
 
                 {currentQualification !== "none" && (
@@ -244,15 +265,26 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                   </>
                 )}
               </div>
+
+              <div className={styles.qualificationHint} id="target-qualification-note">
+                <strong>Как выбирается цель</strong>
+                <span>
+                  {currentQualification === "none"
+                    ? "Если классности пока нет, доступна подготовка к 3-му классу."
+                    : allowedTargets.length === 1
+                      ? "Следующей ступени для этого вида службы нет — можно готовиться к подтверждению текущей классности."
+                      : "Можно подтвердить текущую классность или готовиться к следующей ступени."}
+                </span>
+              </div>
             </section>
 
-            <aside className={styles.notice}>
+            {/* <aside className={styles.notice}>
               <strong>Важно</strong>
               <p>
                 MVP строит обычный последовательный маршрут; исключительные решения комиссии не автоматизируются. Расчёты в приложении являются учебным прогнозом. Конкретный перечень предметов,
                 допуск и присвоение классности определяются уполномоченными должностными лицами.
               </p>
-            </aside>
+            </aside> */}
 
             <label className={styles.confirmation}>
               <input

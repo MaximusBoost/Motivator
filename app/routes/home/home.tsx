@@ -76,7 +76,7 @@ export default function Home({ loaderData: { dashboard, roadmap } }: Route.Compo
             <>
               <div className={styles.routeScore}>
                 <strong>{roadmap.readinessPercent}%</strong>
-                <span>общая готовность</span>
+                <span>индекс маршрута</span>
               </div>
               <div className={styles.routeCopy}>
                 <span>Целевая классность</span>

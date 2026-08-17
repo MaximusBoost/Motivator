@@ -38,6 +38,16 @@ const statusLabels = {
 
 export default function Qualification({ loaderData: roadmap }: Route.ComponentProps) {
   const profile = roadmap.profile;
+  const readinessFactors = [
+    { label: "Обучение", weight: 45, value: roadmap.learningReadinessPercent },
+    { label: "Пробный экзамен", weight: 35, value: roadmap.examReadinessPercent },
+    { label: "Практика", weight: 10, value: roadmap.practiceReadinessPercent },
+    {
+      label: "Физподготовка",
+      weight: 10,
+      value: roadmap.requirements.find((requirement) => requirement.id === "physical")?.progressPercent ?? 0,
+    },
+  ];
 
   return (
     <RequireAuth>
@@ -68,16 +78,19 @@ export default function Qualification({ loaderData: roadmap }: Route.ComponentPr
                   <div
                     className={styles.readinessRing}
                     style={{ "--progress-angle": `${roadmap.readinessPercent * 3.6}deg` } as CSSProperties}
-                    aria-label={`Общая готовность ${roadmap.readinessPercent}%`}
+                    aria-label={`Сводный учебный индекс маршрута ${roadmap.readinessPercent}%`}
                   >
                     <strong>{roadmap.readinessPercent}%</strong>
-                    <span>готовность</span>
+                    <span>индекс маршрута</span>
                   </div>
-                  <div>
-                    <span className={styles.eyebrow}>Ближайший класс</span>
+                  <div className={styles.readinessContent}>
+                    <span className={styles.eyebrow}>Цель по классности</span>
                     <h2>{qualificationLabels[profile.targetQualification]}</h2>
                     <p>{roadmap.eligibilityLabel}</p>
-                    <strong className={styles.bonus}>До +{qualificationBonusPercent[profile.targetQualification]}% к окладу по воинской должности</strong>
+                    <strong className={styles.bonus}>+{qualificationBonusPercent[profile.targetQualification]}% к окладу по воинской должности</strong>
+                    <ul className={styles.readinessFactors} aria-label="Состав общего индекса маршрута">
+                      
+                    </ul>
                   </div>
                 </article>
 
@@ -107,7 +120,7 @@ export default function Qualification({ loaderData: roadmap }: Route.ComponentPr
                       <strong className={styles.bonus}>
                         {profile.serviceType === "contract"
                           ? roadmap.physical.targetBonusPercent > 0
-                            ? `Ориентир надбавки: +${roadmap.physical.targetBonusPercent}% к окладу по воинской должности`
+                            ? `+${roadmap.physical.targetBonusPercent}% к окладу по воинской должности`
                             : "Для третьего уровня отдельный процент надбавки не показывается"
                           : "Для службы по призыву денежная надбавка не рассчитывается"}
                       </strong>
@@ -118,14 +131,18 @@ export default function Qualification({ loaderData: roadmap }: Route.ComponentPr
               </section>
 
               <article className={`${styles.forecastCard} ${styles.forecastWide}`}>
-                  <span className={styles.eyebrow}>Предварительный прогноз</span>
-                  <strong>{qualificationLabels[roadmap.predictedQualification]}</strong>
+                  <span className={styles.eyebrow}>Последнее пробное квалификационное испытание</span>
+                  <strong>
+                    {roadmap.latestExam
+                      ? `Учебный прогноз: ${qualificationLabels[roadmap.predictedQualification]}`
+                      : "Результата пока нет"}
+                  </strong>
                   <p>
                     {roadmap.latestExam
-                      ? `По последнему испытанию: ${roadmap.latestExam.averageScorePercent}% среднего результата.`
-                      : "Пройдите пробное испытание, чтобы получить первый прогноз."}
+                      ? `Средний результат по предметам — ${roadmap.latestExam.averageScorePercent}%. Это итог последнего запуска пробного экзамена внутри приложения, а не решение квалификационной комиссии.`
+                      : "Пройдите пробный экзамен внутри приложения, чтобы проверить знания по предметам и получить учебный прогноз."}
                   </p>
-                  <Button text="Пройти испытание" to="/qualification/exam" size="s" />
+                  <Button text={roadmap.latestExam ? "Пройти ещё раз" : "Пройти пробный экзамен"} to="/qualification/exam" size="s" />
               </article>
 
               <section className={styles.profileStrip} aria-label="Параметры маршрута">
