@@ -6,9 +6,14 @@ import { AppShell } from "~/components/AppShell/AppShell";
 import { learningRepository } from "~/data/learning";
 import {
   QUALIFICATION_POLICY_SOURCE,
+  qualificationBonusPercent,
   qualificationLabels,
   serviceDirectionLabels,
 } from "~/data/qualification-policy";
+import {
+  PHYSICAL_POLICY_SOURCE,
+  physicalQualificationLabels,
+} from "~/data/physical-training-policy";
 import { getCurrentUserId } from "~/features/auth/AuthProvider";
 import { RequireAuth } from "~/features/auth/RequireAuth";
 import { Button } from "~/secondApp/components/Button/Button";
@@ -41,8 +46,8 @@ export default function Qualification({ loaderData: roadmap }: Route.ComponentPr
           <header className={styles.header}>
             <div>
               <span>Персональная траектория</span>
-              <h1>Маршрут к классной квалификации</h1>
-              <p>Учебный прогноз на основе теории, пробных тестов и самостоятельно внесённых результатов.</p>
+              <h1>Мой маршрут</h1>
+              <p>Две связанные цели: ближайший квалификационный класс и уровень физической подготовленности.</p>
             </div>
             {profile && <Button text="Изменить цель" to="/onboarding" variant="secondary" />}
           </header>
@@ -69,13 +74,50 @@ export default function Qualification({ loaderData: roadmap }: Route.ComponentPr
                     <span>готовность</span>
                   </div>
                   <div>
-                    <span className={styles.eyebrow}>Ваша цель</span>
+                    <span className={styles.eyebrow}>Ближайший класс</span>
                     <h2>{qualificationLabels[profile.targetQualification]}</h2>
                     <p>{roadmap.eligibilityLabel}</p>
+                    <strong className={styles.bonus}>До +{qualificationBonusPercent[profile.targetQualification]}% к окладу по воинской должности</strong>
                   </div>
                 </article>
 
-                <article className={styles.forecastCard}>
+                <article className={styles.physicalGoalCard}>
+                  <div
+                    className={styles.smallReadinessRing}
+                    style={{ "--progress-angle": `${(roadmap.physical.assessment?.progressPercent ?? 0) * 3.6}deg` } as CSSProperties}
+                    aria-label={`Готовность к физической цели ${roadmap.physical.assessment?.progressPercent ?? 0}%`}
+                  >
+                    <strong>{roadmap.physical.assessment?.progressPercent ?? 0}%</strong>
+                  </div>
+                  <div>
+                    <span className={styles.eyebrow}>Цель по физподготовке</span>
+                    <h2>
+                      {roadmap.physical.profile
+                        ? physicalQualificationLabels[roadmap.physical.profile.targetLevel]
+                        : "Настройте цель"}
+                    </h2>
+                    <p>
+                      {roadmap.physical.assessment?.preliminaryLevel
+                        ? `Предварительно: ${physicalQualificationLabels[roadmap.physical.assessment.preliminaryLevel]}.`
+                        : roadmap.physical.assessment
+                          ? `Собрано ${roadmap.physical.assessment.countedExerciseCount} из ${roadmap.physical.assessment.requiredExerciseCount} физических качеств.`
+                          : "Добавьте пол, дату рождения, категорию и результаты упражнений."}
+                    </p>
+                    {roadmap.physical.profile && (
+                      <strong className={styles.bonus}>
+                        {profile.serviceType === "contract"
+                          ? roadmap.physical.targetBonusPercent > 0
+                            ? `Ориентир надбавки: +${roadmap.physical.targetBonusPercent}% к окладу по воинской должности`
+                            : "Для третьего уровня отдельный процент надбавки не показывается"
+                          : "Для службы по призыву денежная надбавка не рассчитывается"}
+                      </strong>
+                    )}
+                    <Button text={roadmap.physical.profile ? "Открыть программу" : "Настроить физподготовку"} to="/practice" size="s" variant="secondary" />
+                  </div>
+                </article>
+              </section>
+
+              <article className={`${styles.forecastCard} ${styles.forecastWide}`}>
                   <span className={styles.eyebrow}>Предварительный прогноз</span>
                   <strong>{qualificationLabels[roadmap.predictedQualification]}</strong>
                   <p>
@@ -84,14 +126,13 @@ export default function Qualification({ loaderData: roadmap }: Route.ComponentPr
                       : "Пройдите пробное испытание, чтобы получить первый прогноз."}
                   </p>
                   <Button text="Пройти испытание" to="/qualification/exam" size="s" />
-                </article>
-              </section>
+              </article>
 
               <section className={styles.profileStrip} aria-label="Параметры маршрута">
                 <div><span>Направление</span><strong>{serviceDirectionLabels[profile.serviceDirection]}</strong></div>
                 <div><span>Служба</span><strong>{profile.serviceType === "contract" ? "По контракту" : "По призыву"}</strong></div>
                 <div><span>Текущая классность</span><strong>{qualificationLabels[profile.currentQualification]}</strong></div>
-                <div><span>Физподготовка</span><strong>{roadmap.physicalGrade ? `Оценка ${roadmap.physicalGrade}` : "Нет данных"}</strong></div>
+                <div><span>Физподготовка</span><strong>{roadmap.physicalGrade ? `Итоговая оценка ${roadmap.physicalGrade}` : "Комплекс не собран"}</strong></div>
               </section>
 
               {roadmap.blockers.length > 0 && (
@@ -169,6 +210,8 @@ export default function Qualification({ loaderData: roadmap }: Route.ComponentPr
             <p>
               Основа расчёта: {QUALIFICATION_POLICY_SOURCE}. Перечень предметов и результаты в приложении
               не подтверждают присвоение классности и требуют сверки с действующими документами и решением комиссии.
+              Физическая подготовка: {PHYSICAL_POLICY_SOURCE}. Проценты показаны как мотивационный ориентир;
+              право на выплату возникает только по официально оформленным результатам и должно подтверждаться финансовым органом.
             </p>
           </footer>
         </main>

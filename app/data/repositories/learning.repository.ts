@@ -4,6 +4,8 @@ import type {
   FreeAnswerActivity,
   FreeAnswerDraft,
   LearningModule,
+  PhysicalProfile,
+  PhysicalProfileInput,
   PracticeResult,
   PracticeResultInput,
   PhysicalTrainingAdvice,
@@ -67,6 +69,8 @@ export interface LearningRepository {
     input: QualificationProfileInput,
     userId?: string,
   ): Promise<QualificationProfile>;
+  getPhysicalProfile(userId?: string): Promise<PhysicalProfile | null>;
+  savePhysicalProfile(input: PhysicalProfileInput, userId?: string): Promise<PhysicalProfile>;
   getQualificationRoadmap(userId?: string): Promise<QualificationRoadmap>;
   createQualificationExam(subjectIds: string[], userId?: string): Promise<QualificationExam>;
   submitQualificationExam(

@@ -75,6 +75,7 @@
 }
 
 .readinessCard,
+.physicalGoalCard,
 .forecastCard,
 .blockers,
 .subjectList,
@@ -92,6 +93,25 @@
   padding: 26px;
 }
 
+.physicalGoalCard {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 26px;
+}
+
+.physicalGoalCard h2 {
+  margin: 7px 0 8px;
+  font-size: 20px;
+}
+
+.physicalGoalCard p {
+  margin: 0 0 12px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .readinessCard h2 {
   margin: 7px 0 8px;
   font-size: 24px;
@@ -107,6 +127,39 @@
   border-radius: 50%;
   background: conic-gradient(var(--color-action-primary) var(--progress-angle), #e6ebef 0);
   text-align: center;
+}
+
+.smallReadinessRing {
+  position: relative;
+  display: grid;
+  width: 82px;
+  height: 82px;
+  flex: 0 0 auto;
+  place-content: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--color-action-primary) var(--progress-angle), #e6ebef 0);
+}
+
+.smallReadinessRing::before {
+  position: absolute;
+  inset: 8px;
+  border-radius: inherit;
+  background: var(--color-surface-default);
+  content: "";
+}
+
+.smallReadinessRing strong {
+  position: relative;
+  z-index: 1;
+  font-size: 16px;
+}
+
+.bonus {
+  display: block;
+  margin: 10px 0 13px;
+  color: var(--color-status-success);
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .readinessRing::before {
@@ -134,6 +187,10 @@
 
 .forecastCard {
   padding: 26px;
+}
+
+.forecastWide {
+  margin-top: 20px;
 }
 
 .forecastCard > strong {
@@ -403,6 +460,10 @@
     align-items: flex-start;
   }
 
+  .physicalGoalCard {
+    align-items: flex-start;
+  }
+
   .readinessRing {
     width: 104px;
     height: 104px;
@@ -429,6 +490,11 @@
   }
 
   .readinessCard {
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .physicalGoalCard {
     flex-direction: column;
     padding: 20px;
   }

@@ -22,6 +22,11 @@ type ServiceDirection =
   | "medical_support";
 type QualificationLevel = "none" | "third" | "second" | "first" | "master";
 type PracticeCategory = "professional" | "physical";
+type PhysicalSex = "male" | "female";
+type PhysicalAssessmentCategory = 1 | 2 | 3;
+type PhysicalQualificationLevel = "third" | "second" | "first" | "highest";
+type PhysicalQuality = "strength" | "speed" | "endurance";
+type PhysicalExerciseId = "push_ups" | "pull_ups" | "run_100m" | "run_1km";
 type ContentSourceKind =
   | "user_document"
   | "official_legal"
@@ -263,6 +268,21 @@ type UserPracticeResultRow = {
   source: "self_reported";
   created_at: string;
   updated_at: string;
+  physical_exercise_id: PhysicalExerciseId | null;
+  physical_quality: PhysicalQuality | null;
+  points: number | null;
+  age_group: number | null;
+};
+
+type UserPhysicalProfileRow = {
+  user_id: string;
+  sex: PhysicalSex;
+  birth_date: string;
+  assessment_category: PhysicalAssessmentCategory;
+  target_level: PhysicalQualificationLevel;
+  policy_version: string;
+  created_at: string;
+  updated_at: string;
 };
 
 type QualificationExamAttemptRow = {
@@ -392,6 +412,15 @@ export type Database = {
         | "grade"
         | "performed_at"
       >;
+      user_physical_profiles: DbTable<
+        UserPhysicalProfileRow,
+        | "user_id"
+        | "sex"
+        | "birth_date"
+        | "assessment_category"
+        | "target_level"
+        | "policy_version"
+      >;
       physical_training_advice: DbTable<
         PhysicalTrainingAdviceRow,
         | "user_id"
@@ -462,6 +491,10 @@ export type Database = {
       service_direction: ServiceDirection;
       qualification_level: QualificationLevel;
       practice_category: PracticeCategory;
+      physical_sex: PhysicalSex;
+      physical_qualification_level: PhysicalQualificationLevel;
+      physical_quality: PhysicalQuality;
+      physical_exercise_id: PhysicalExerciseId;
       content_source_kind: ContentSourceKind;
     };
     CompositeTypes: Record<string, never>;

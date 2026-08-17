@@ -139,6 +139,13 @@ try {
     qualificationExpiresAt: null,
     targetQualification: "third",
   }, userId);
+  const smokeBirthYear = new Date().getFullYear() - 32;
+  await repository.savePhysicalProfile({
+    sex: "male",
+    birthDate: `${smokeBirthYear}-01-01`,
+    assessmentCategory: 3,
+    targetLevel: "highest",
+  }, userId);
 
   const subjects = await repository.getSubjects(userId);
   assert(subjects.length === 7, `Expected 7 subjects, received ${subjects.length}`);
@@ -230,15 +237,47 @@ try {
     "Negative practice result must be rejected",
   );
 
+  await repository.savePracticeResult({
+    category: "physical",
+    subjectId: null,
+    title: "Сгибание и разгибание рук в упоре лёжа",
+    value: 38,
+    unit: "раз",
+    grade: 4,
+    performedAt: "2026-08-17",
+    notes: null,
+    physicalExerciseId: "push_ups",
+    physicalQuality: "strength",
+    points: 50,
+    ageGroup: 3,
+  }, userId);
+  await repository.savePracticeResult({
+    category: "physical",
+    subjectId: null,
+    title: "Бег на 100 м",
+    value: 14.1,
+    unit: "s",
+    grade: 4,
+    performedAt: "2026-08-17",
+    notes: null,
+    physicalExerciseId: "run_100m",
+    physicalQuality: "speed",
+    points: 50,
+    ageGroup: 3,
+  }, userId);
   const physicalResult = await repository.savePracticeResult({
     category: "physical",
     subjectId: null,
     title: "Контрольный норматив",
-    value: 12.4,
-    unit: "мин",
+    value: 224,
+    unit: "s",
     grade: 4,
     performedAt: "2026-08-17",
     notes: null,
+    physicalExerciseId: "run_1km",
+    physicalQuality: "endurance",
+    points: 50,
+    ageGroup: 3,
   }, userId);
   await repository.savePracticeResult({
     category: "professional",

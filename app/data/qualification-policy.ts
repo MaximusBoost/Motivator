@@ -1,4 +1,5 @@
 import type {
+  PhysicalProfile,
   PracticeResult,
   QualificationExamResult,
   QualificationExamSubjectResult,
@@ -12,6 +13,10 @@ import type {
   Subject,
   TargetGrade,
 } from "~/data/types";
+import {
+  assessPhysicalResults,
+  physicalBonusPercent,
+} from "~/data/physical-training-policy";
 
 export const QUALIFICATION_POLICY_VERSION = "mo-256:2025-02-11";
 export const QUALIFICATION_POLICY_SOURCE =
@@ -23,6 +28,14 @@ export const qualificationLabels: Record<QualificationLevel, string> = {
   second: "Специалист 2-го класса",
   first: "Специалист 1-го класса",
   master: "Мастер",
+};
+
+export const qualificationBonusPercent: Record<QualificationLevel, number> = {
+  none: 0,
+  third: 5,
+  second: 10,
+  first: 20,
+  master: 30,
 };
 
 export const serviceDirectionLabels: Record<ServiceDirection, string> = {
@@ -43,12 +56,23 @@ const qualificationRank: Record<QualificationLevel, number> = {
   master: 4,
 };
 
-function nextQualificationLevel(profile: QualificationProfile): QualificationLevel {
-  if (profile.currentQualification === "none") return "third";
-  if (profile.currentQualification === "third") return "second";
-  if (profile.currentQualification === "second") return "first";
-  if (profile.currentQualification === "first" && profile.serviceType === "contract") return "master";
-  return profile.currentQualification;
+export function getNextQualificationLevel(
+  currentQualification: QualificationLevel,
+  serviceType: ServiceType,
+): Exclude<QualificationLevel, "none"> {
+  if (currentQualification === "none") return "third";
+  if (currentQualification === "third") return "second";
+  if (currentQualification === "second") return "first";
+  if (currentQualification === "first" && serviceType === "contract") return "master";
+  return currentQualification;
+}
+
+export function isSequentialQualificationTarget(
+  currentQualification: QualificationLevel,
+  targetQualification: Exclude<QualificationLevel, "none">,
+  serviceType: ServiceType,
+): boolean {
+  return targetQualification === getNextQualificationLevel(currentQualification, serviceType);
 }
 
 const gradeReadiness: Record<TargetGrade, number> = {
@@ -177,11 +201,15 @@ export function buildQualificationExamResult(input: {
   subjectResults: QualificationExamSubjectResult[];
   completedAt?: string;
 }): QualificationExamResult {
-  const predictedQualification = predictQualification(
+  const demonstratedQualification = predictQualification(
     input.subjectResults.map((result) => result.grade),
     input.physicalGrade,
     input.serviceType,
   );
+  const predictedQualification = qualificationRank[demonstratedQualification]
+    > qualificationRank[input.targetQualification]
+    ? input.targetQualification
+    : demonstratedQualification;
   const qualifiesForTarget = reachesQualification(predictedQualification, input.targetQualification);
   const blockers: string[] = [];
 
@@ -261,6 +289,7 @@ function requirement(
 
 export function buildQualificationRoadmap(input: {
   profile: QualificationProfile | null;
+  physicalProfile: PhysicalProfile | null;
   subjects: Subject[];
   practiceResults: PracticeResult[];
   examResults: QualificationExamResult[];
@@ -292,6 +321,12 @@ export function buildQualificationRoadmap(input: {
   const latestPhysical = [...input.practiceResults]
     .filter((result) => result.category === "physical")
     .sort((left, right) => right.performedAt.localeCompare(left.performedAt))[0] ?? null;
+  const physicalAssessment = input.physicalProfile && input.profile
+    ? assessPhysicalResults(input.physicalProfile, input.profile.serviceType, input.practiceResults)
+    : null;
+  const legacyPhysicalGrade = latestPhysical?.points === null || latestPhysical?.points === undefined
+    ? latestPhysical?.grade ?? null
+    : null;
   const professionalResults = input.practiceResults.filter(
     (result) => result.category === "professional",
   );
@@ -301,7 +336,8 @@ export function buildQualificationRoadmap(input: {
       : average(professionalResults.map((result) => gradeReadiness[result.grade])),
   );
   const examReadinessPercent = latestExam?.averageScorePercent ?? 0;
-  const physicalReadinessPercent = latestPhysical ? gradeReadiness[latestPhysical.grade] : 0;
+  const physicalReadinessPercent = physicalAssessment?.progressPercent
+    ?? (legacyPhysicalGrade ? gradeReadiness[legacyPhysicalGrade] : 0);
 
   if (!input.profile) {
     return {
@@ -310,7 +346,7 @@ export function buildQualificationRoadmap(input: {
       learningReadinessPercent,
       practiceReadinessPercent,
       examReadinessPercent,
-      physicalGrade: latestPhysical?.grade ?? null,
+      physicalGrade: physicalAssessment?.grade ?? legacyPhysicalGrade,
       eligibleAt: null,
       eligibilityLabel: "Сначала настройте персональный маршрут.",
       predictedQualification: "none",
@@ -328,15 +364,23 @@ export function buildQualificationRoadmap(input: {
       ],
       subjects: subjectReadiness,
       latestExam,
+      physical: {
+        profile: input.physicalProfile,
+        assessment: physicalAssessment,
+        targetBonusPercent: 0,
+      },
     };
   }
 
   const eligibility = getEligibility(input.profile);
-  const physicalGrade = latestPhysical?.grade ?? null;
+  const physicalGrade = physicalAssessment?.grade ?? legacyPhysicalGrade;
   const predictedQualification = latestExam?.predictedQualification ?? "none";
   const targetReached = latestExam?.qualifiesForTarget ?? false;
   const blockers: string[] = [];
-  const nextQualification = nextQualificationLevel(input.profile);
+  const nextQualification = getNextQualificationLevel(
+    input.profile.currentQualification,
+    input.profile.serviceType,
+  );
 
   if (!eligibility.isEligible) blockers.push(eligibility.label);
   if (qualificationRank[input.profile.targetQualification] > qualificationRank[nextQualification]) {
@@ -418,5 +462,12 @@ export function buildQualificationRoadmap(input: {
     ],
     subjects: subjectReadiness,
     latestExam,
+    physical: {
+      profile: input.physicalProfile,
+      assessment: physicalAssessment,
+      targetBonusPercent: input.physicalProfile && input.profile.serviceType === "contract"
+        ? physicalBonusPercent[input.physicalProfile.targetLevel]
+        : 0,
+    },
   };
 }

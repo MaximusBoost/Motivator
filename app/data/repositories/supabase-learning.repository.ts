@@ -4,6 +4,7 @@ import type {
   FreeAnswerActivity,
   LearningActivity,
   LearningModule,
+  PhysicalProfile,
   PracticeResult,
   PhysicalTrainingAdvice,
   ProgressStatus,
@@ -16,9 +17,14 @@ import type {
 import {
   buildQualificationExamResult,
   buildQualificationRoadmap,
+  getNextQualificationLevel,
   QUALIFICATION_POLICY_VERSION,
-  reachesQualification,
+  isSequentialQualificationTarget,
 } from "~/data/qualification-policy";
+import {
+  calculateAge,
+  PHYSICAL_POLICY_VERSION,
+} from "~/data/physical-training-policy";
 import { getSupabaseClient } from "~/lib/supabase/client";
 import type { Database } from "~/lib/supabase/database.types";
 import type { LearningRepository } from "./learning.repository";
@@ -109,7 +115,7 @@ function mapQualificationProfile(
     currentQualification: row.current_qualification,
     qualificationAwardedAt: row.qualification_awarded_at,
     qualificationExpiresAt: row.qualification_expires_at,
-    targetQualification: row.target_qualification,
+    targetQualification: getNextQualificationLevel(row.current_qualification, row.service_type),
     policyVersion: row.policy_version,
     onboardingCompletedAt: row.onboarding_completed_at,
     activeServiceConfirmedAt: row.active_service_confirmed_at,
@@ -131,6 +137,22 @@ function mapPracticeResult(row: Row<"user_practice_results">): PracticeResult {
     notes: row.notes,
     source: row.source,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    physicalExerciseId: row.physical_exercise_id,
+    physicalQuality: row.physical_quality,
+    points: row.points === null ? null : Number(row.points),
+    ageGroup: row.age_group,
+  };
+}
+
+function mapPhysicalProfile(row: Row<"user_physical_profiles">): PhysicalProfile {
+  return {
+    userId: row.user_id,
+    sex: row.sex,
+    birthDate: row.birth_date,
+    assessmentCategory: row.assessment_category,
+    targetLevel: row.target_level,
+    policyVersion: row.policy_version,
     updatedAt: row.updated_at,
   };
 }
@@ -602,8 +624,6 @@ async function loadQualificationExamResult(
 
   return {
     ...result,
-    predictedQualification: attempt.predicted_qualification,
-    qualifiesForTarget: attempt.qualifies_for_target,
     averageScorePercent: attempt.average_score_percent,
     policyVersion: attempt.policy_version,
   };
@@ -1035,11 +1055,12 @@ export const supabaseLearningRepository: LearningRepository = {
     if (input.serviceType === "conscript" && input.targetQualification === "master") {
       throw new Error("Для службы по призыву цель «Мастер» не предусмотрена.");
     }
-    if (
-      input.currentQualification !== input.targetQualification &&
-      reachesQualification(input.currentQualification, input.targetQualification)
-    ) {
-      throw new Error("Целевая классность не может быть ниже текущей.");
+    if (!isSequentialQualificationTarget(
+      input.currentQualification,
+      input.targetQualification,
+      input.serviceType,
+    )) {
+      throw new Error("Выберите ближайший последовательный квалификационный класс.");
     }
     const client = getSupabaseClient();
     const result = await client
@@ -1068,9 +1089,49 @@ export const supabaseLearningRepository: LearningRepository = {
     return mapQualificationProfile(dataOrThrow("user_qualification_profiles", result));
   },
 
+  async getPhysicalProfile(userId) {
+    if (!userId) return null;
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_physical_profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (result.error) {
+      throw new Error(`Не удалось загрузить профиль физподготовки: ${result.error.message}`);
+    }
+    return result.data ? mapPhysicalProfile(result.data) : null;
+  },
+
+  async savePhysicalProfile(input, userId) {
+    if (!userId) throw new Error("Для настройки физподготовки необходимо войти.");
+    const age = calculateAge(input.birthDate);
+    if (age === null || age < 18) {
+      throw new Error("Укажите корректную дату рождения военнослужащего старше 18 лет.");
+    }
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_physical_profiles")
+      .upsert(
+        {
+          user_id: userId,
+          sex: input.sex,
+          birth_date: input.birthDate,
+          assessment_category: input.assessmentCategory,
+          target_level: input.targetLevel,
+          policy_version: PHYSICAL_POLICY_VERSION,
+        },
+        { onConflict: "user_id" },
+      )
+      .select("*")
+      .single();
+    return mapPhysicalProfile(dataOrThrow("user_physical_profiles", result));
+  },
+
   async getQualificationRoadmap(userId) {
-    const [profile, subjects, practiceResults] = await Promise.all([
+    const [profile, physicalProfile, subjects, practiceResults] = await Promise.all([
       this.getQualificationProfile(userId),
+      this.getPhysicalProfile(userId),
       getSubjects(userId),
       this.getPracticeResults(userId),
     ]);
@@ -1095,6 +1156,7 @@ export const supabaseLearningRepository: LearningRepository = {
 
     return buildQualificationRoadmap({
       profile,
+      physicalProfile,
       subjects,
       practiceResults,
       examResults: latestExam ? [latestExam] : [],
@@ -1203,6 +1265,11 @@ export const supabaseLearningRepository: LearningRepository = {
 
   async savePracticeResult(input, userId) {
     if (!userId) throw new Error("Для сохранения результата необходимо войти.");
+    if (input.category === "physical" && (
+      !input.physicalExerciseId || !input.physicalQuality || input.points === null || input.points === undefined
+    )) {
+      throw new Error("Для физической подготовки выберите упражнение и рассчитайте баллы.");
+    }
     const client = getSupabaseClient();
     const result = await client
       .from("user_practice_results")
@@ -1216,6 +1283,10 @@ export const supabaseLearningRepository: LearningRepository = {
         grade: input.grade,
         performed_at: input.performedAt,
         notes: input.notes?.trim() || null,
+        physical_exercise_id: input.physicalExerciseId ?? null,
+        physical_quality: input.physicalQuality ?? null,
+        points: input.points ?? null,
+        age_group: input.ageGroup ?? null,
       })
       .select("*")
       .single();

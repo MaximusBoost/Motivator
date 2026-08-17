@@ -18,6 +18,11 @@ export type ServiceDirection =
   | "medical_support";
 export type QualificationLevel = "none" | "third" | "second" | "first" | "master";
 export type PracticeCategory = "professional" | "physical";
+export type PhysicalSex = "male" | "female";
+export type PhysicalAssessmentCategory = 1 | 2 | 3;
+export type PhysicalQualificationLevel = "third" | "second" | "first" | "highest";
+export type PhysicalQuality = "strength" | "speed" | "endurance";
+export type PhysicalExerciseId = "push_ups" | "pull_ups" | "run_100m" | "run_1km";
 
 export type TheorySection = {
   id: Identifier;
@@ -219,6 +224,38 @@ export type QualificationProfile = QualificationProfileInput & {
   updatedAt: string;
 };
 
+export type PhysicalProfileInput = {
+  sex: PhysicalSex;
+  birthDate: string;
+  assessmentCategory: PhysicalAssessmentCategory;
+  targetLevel: PhysicalQualificationLevel;
+};
+
+export type PhysicalProfile = PhysicalProfileInput & {
+  userId: Identifier;
+  policyVersion: string;
+  updatedAt: string;
+};
+
+export type PhysicalAssessmentSummary = {
+  grade: TargetGrade | null;
+  preliminaryLevel: PhysicalQualificationLevel | null;
+  sumPoints: number;
+  requiredExerciseCount: number;
+  countedExerciseCount: number;
+  minimumPointsPerExercise: number;
+  missingQualities: PhysicalQuality[];
+  progressPercent: number;
+  targetPoints: number | null;
+  isComplete: boolean;
+};
+
+export type PhysicalRoadmap = {
+  profile: PhysicalProfile | null;
+  assessment: PhysicalAssessmentSummary | null;
+  targetBonusPercent: number;
+};
+
 export type QualificationRequirementProgress = {
   id: Identifier;
   title: string;
@@ -253,6 +290,7 @@ export type QualificationRoadmap = {
   requirements: QualificationRequirementProgress[];
   subjects: QualificationSubjectReadiness[];
   latestExam: QualificationExamResult | null;
+  physical: PhysicalRoadmap;
 };
 
 export type QualificationExamSubject = {
@@ -301,6 +339,10 @@ export type PracticeResultInput = {
   grade: TargetGrade;
   performedAt: string;
   notes: string | null;
+  physicalExerciseId?: PhysicalExerciseId | null;
+  physicalQuality?: PhysicalQuality | null;
+  points?: number | null;
+  ageGroup?: number | null;
 };
 
 export type PracticeResult = PracticeResultInput & {
@@ -320,6 +362,22 @@ export type PhysicalTrainingAdvice = {
   caution: string;
   source: "ai" | "demo_algorithm";
   generatedAt: string;
+};
+
+export type PhysicalTrainingSession = {
+  day: string;
+  title: string;
+  details: string;
+  intensity: string;
+};
+
+export type PhysicalTrainingProgram = {
+  title: string;
+  durationWeeks: number;
+  rationale: string;
+  weeklySessions: PhysicalTrainingSession[];
+  progression: string[];
+  caution: string;
 };
 
 export type SubjectCardType = {

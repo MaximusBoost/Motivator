@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import type { Route } from "./+types/onboarding";
 import { AppShell } from "~/components/AppShell/AppShell";
 import { learningRepository } from "~/data/learning";
+import { getNextQualificationLevel } from "~/data/qualification-policy";
 import type {
   PersonnelCategory,
   PositionProfile,
@@ -18,19 +19,11 @@ import { Button } from "~/secondApp/components/Button/Button";
 import styles from "./onboarding.module.scss";
 
 const qualificationOptions = [
-  { value: "third", label: "Специалист 3-го класса", rank: 1 },
-  { value: "second", label: "Специалист 2-го класса", rank: 2 },
-  { value: "first", label: "Специалист 1-го класса", rank: 3 },
-  { value: "master", label: "Мастер", rank: 4 },
+  { value: "third", label: "Специалист 3-го класса" },
+  { value: "second", label: "Специалист 2-го класса" },
+  { value: "first", label: "Специалист 1-го класса" },
+  { value: "master", label: "Мастер" },
 ] as const;
-
-const qualificationRanks: Record<QualificationLevel, number> = {
-  none: 0,
-  third: 1,
-  second: 2,
-  first: 3,
-  master: 4,
-};
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Настройка маршрута | Motivator" }];
@@ -47,9 +40,7 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
   const [currentQualification, setCurrentQualification] = useState<QualificationLevel>(
     profile?.currentQualification ?? "none",
   );
-  const [targetQualification, setTargetQualification] = useState<Exclude<QualificationLevel, "none">>(
-    profile?.targetQualification ?? "third",
-  );
+  const targetQualification = getNextQualificationLevel(currentQualification, serviceType);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -125,11 +116,6 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                       if (nextType === "conscript") {
                         if (currentQualification === "master") {
                           setCurrentQualification("none");
-                          setTargetQualification("third");
-                        } else if (targetQualification === "master") {
-                          setTargetQualification(
-                            currentQualification === "none" ? "third" : currentQualification,
-                          );
                         }
                       }
                     }}
@@ -211,9 +197,6 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                     onChange={(event) => {
                       const nextCurrent = event.target.value as QualificationLevel;
                       setCurrentQualification(nextCurrent);
-                      if (qualificationRanks[targetQualification] < qualificationRanks[nextCurrent]) {
-                        setTargetQualification(nextCurrent as Exclude<QualificationLevel, "none">);
-                      }
                     }}
                   >
                     <option value="none">Нет</option>
@@ -228,18 +211,16 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                   <select
                     name="targetQualification"
                     value={targetQualification}
-                    onChange={(event) => setTargetQualification(
-                      event.target.value as Exclude<QualificationLevel, "none">,
-                    )}
-                    required
+                    disabled
+                    aria-describedby="target-qualification-note"
                   >
                     {qualificationOptions
-                      .filter((option) =>
-                        option.rank >= qualificationRanks[currentQualification] &&
-                        (serviceType === "contract" || option.value !== "master"),
-                      )
+                      .filter((option) => option.value === targetQualification)
                       .map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
+                  <small id="target-qualification-note">
+                    Ближайший этап определяется автоматически: 3-й → 2-й → 1-й → мастер.
+                  </small>
                 </label>
 
                 {currentQualification !== "none" && (
@@ -268,7 +249,7 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
             <aside className={styles.notice}>
               <strong>Важно</strong>
               <p>
-                Расчёты в приложении являются учебным прогнозом. Конкретный перечень предметов,
+                MVP строит обычный последовательный маршрут; исключительные решения комиссии не автоматизируются. Расчёты в приложении являются учебным прогнозом. Конкретный перечень предметов,
                 допуск и присвоение классности определяются уполномоченными должностными лицами.
               </p>
             </aside>

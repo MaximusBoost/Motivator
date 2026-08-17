@@ -3,6 +3,7 @@ import type {
   FreeAnswerActivity,
   LearningActivity,
   LearningModule,
+  PhysicalProfile,
   PracticeResult,
   PhysicalTrainingAdvice,
   ProgressStatus,
@@ -19,9 +20,15 @@ import {
   buildQualificationExamResult,
   buildQualificationRoadmap,
   gradeQualificationTest,
+  getNextQualificationLevel,
   QUALIFICATION_POLICY_VERSION,
-  reachesQualification,
+  isSequentialQualificationTarget,
 } from "~/data/qualification-policy";
+import {
+  assessPhysicalResults,
+  calculateAge,
+  PHYSICAL_POLICY_VERSION,
+} from "~/data/physical-training-policy";
 import {
   curriculumSources,
   sourceBasedCurriculum,
@@ -407,6 +414,7 @@ type StoredMockState = {
   todayPlanCompletion: Record<string, boolean>;
   goals: Record<string, TargetGrade>;
   qualificationProfile: QualificationProfile | null;
+  physicalProfile: PhysicalProfile | null;
   qualificationExamResults: QualificationExamResult[];
   practiceResults: PracticeResult[];
 };
@@ -418,6 +426,7 @@ const emptyMockState: StoredMockState = {
   todayPlanCompletion: {},
   goals: {},
   qualificationProfile: null,
+  physicalProfile: null,
   qualificationExamResults: [],
   practiceResults: [],
 };
@@ -433,13 +442,21 @@ function readMockState(userId: string): StoredMockState {
     const raw = window.localStorage.getItem(mockStateKey(userId));
     if (!raw) return clone(emptyMockState);
     const parsed = JSON.parse(raw) as Partial<StoredMockState>;
+    const qualificationProfile = parsed.qualificationProfile ?? null;
+    if (qualificationProfile) {
+      qualificationProfile.targetQualification = getNextQualificationLevel(
+        qualificationProfile.currentQualification,
+        qualificationProfile.serviceType,
+      );
+    }
     return {
       activityProgress: parsed.activityProgress ?? {},
       activityTouchedAt: parsed.activityTouchedAt ?? {},
       results: parsed.results ?? [],
       todayPlanCompletion: parsed.todayPlanCompletion ?? {},
       goals: parsed.goals ?? {},
-      qualificationProfile: parsed.qualificationProfile ?? null,
+      qualificationProfile,
+      physicalProfile: parsed.physicalProfile ?? null,
       qualificationExamResults: parsed.qualificationExamResults ?? [],
       practiceResults: parsed.practiceResults ?? [],
     };
@@ -877,11 +894,12 @@ export const mockLearningRepository: LearningRepository = {
     if (input.serviceType === "conscript" && input.targetQualification === "master") {
       throw new Error("Для службы по призыву цель «Мастер» не предусмотрена.");
     }
-    if (
-      input.currentQualification !== input.targetQualification &&
-      reachesQualification(input.currentQualification, input.targetQualification)
-    ) {
-      throw new Error("Целевая классность не может быть ниже текущей.");
+    if (!isSequentialQualificationTarget(
+      input.currentQualification,
+      input.targetQualification,
+      input.serviceType,
+    )) {
+      throw new Error("Выберите ближайший последовательный квалификационный класс.");
     }
     if (!input.serviceStartedAt) throw new Error("Укажите дату начала службы.");
 
@@ -900,10 +918,32 @@ export const mockLearningRepository: LearningRepository = {
     return clone(profile);
   },
 
+  async getPhysicalProfile(userId = "demo-user") {
+    return clone(readMockState(userId).physicalProfile);
+  },
+
+  async savePhysicalProfile(input, userId = "demo-user") {
+    const age = calculateAge(input.birthDate);
+    if (age === null || age < 18) {
+      throw new Error("Укажите корректную дату рождения военнослужащего старше 18 лет.");
+    }
+    const profile: PhysicalProfile = {
+      ...input,
+      userId,
+      policyVersion: PHYSICAL_POLICY_VERSION,
+      updatedAt: new Date().toISOString(),
+    };
+    const state = readMockState(userId);
+    state.physicalProfile = profile;
+    writeMockState(userId, state);
+    return clone(profile);
+  },
+
   async getQualificationRoadmap(userId = "demo-user") {
     const state = readMockState(userId);
     return buildQualificationRoadmap({
       profile: state.qualificationProfile,
+      physicalProfile: state.physicalProfile,
       subjects: subjectsForUser(userId),
       practiceResults: state.practiceResults,
       examResults: state.qualificationExamResults,
@@ -971,9 +1011,12 @@ export const mockLearningRepository: LearningRepository = {
         grade: gradeQualificationTest(correctAnswers, subject.questions.length),
       };
     });
-    const physicalGrade = [...state.practiceResults]
+    const latestPhysical = [...state.practiceResults]
       .filter((result) => result.category === "physical")
-      .sort((left, right) => right.performedAt.localeCompare(left.performedAt))[0]?.grade ?? null;
+      .sort((left, right) => right.performedAt.localeCompare(left.performedAt))[0];
+    const physicalGrade = state.physicalProfile
+      ? assessPhysicalResults(state.physicalProfile, profile.serviceType, state.practiceResults).grade
+      : latestPhysical?.grade ?? null;
     const result = buildQualificationExamResult({
       id: createResultId("qualification-exam"),
       targetQualification: profile.targetQualification,
@@ -1041,6 +1084,11 @@ export const mockLearningRepository: LearningRepository = {
     if (!input.title.trim()) throw new Error("Укажите название норматива или упражнения.");
     if (!Number.isFinite(input.value) || input.value < 0) {
       throw new Error("Укажите корректный результат.");
+    }
+    if (input.category === "physical" && (
+      !input.physicalExerciseId || !input.physicalQuality || input.points === null || input.points === undefined
+    )) {
+      throw new Error("Для физической подготовки выберите упражнение и рассчитайте баллы.");
     }
     const now = new Date().toISOString();
     const result: PracticeResult = {
