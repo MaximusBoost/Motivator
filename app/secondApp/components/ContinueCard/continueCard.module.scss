@@ -10,15 +10,9 @@
 }
 
 .icon {
-  display: grid;
   width: 56px;
   height: 56px;
-  place-items: center;
-  border-radius: 14px;
-  color: var(--color-action-primary);
-  background: var(--color-surface-subtle-blue);
-  font-size: 18px;
-  font-weight: 800;
+  object-fit: contain;
 }
 
 .content {
@@ -94,7 +88,6 @@
   .icon {
     width: 44px;
     height: 44px;
-    border-radius: 12px;
   }
 
   .nextRow {

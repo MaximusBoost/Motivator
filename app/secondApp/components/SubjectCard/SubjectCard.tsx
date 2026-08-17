@@ -1,5 +1,5 @@
 import type { Subject } from "~/data/types";
-import clsx from "clsx";
+import { getSubjectImage } from "~/data/subject-images";
 
 import { Button } from "../Button/Button";
 import { ProgressTrack } from "../ProgressTrack/ProgressTrack";
@@ -10,11 +10,13 @@ type SubjectCardProps = {
 };
 
 export function SubjectCard({ subject }: SubjectCardProps) {
+  const subjectImage = getSubjectImage(subject.id);
+
   return (
     <article className={styles.card}>
-      <div className={clsx(styles.icon, styles[subject.theme])} aria-hidden="true">
-        {subject.code}
-      </div>
+      {subjectImage ? (
+        <img className={styles.icon} src={subjectImage} alt="" aria-hidden="true" />
+      ) : null}
 
       <h3 className={styles.title}>{subject.title}</h3>
       <p className={styles.subtitle}>{subject.subtitle}</p>

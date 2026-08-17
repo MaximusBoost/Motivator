@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import type { Route } from "./+types/progress";
 import { AppShell } from "~/components/AppShell/AppShell";
 import { learningRepository } from "~/data/learning";
+import { getSubjectImage } from "~/data/subject-images";
 import { getCurrentUserId } from "~/features/auth/AuthProvider";
 import { RequireAuth } from "~/features/auth/RequireAuth";
 import { ProgressTrack } from "~/secondApp/components/ProgressTrack/ProgressTrack";
@@ -47,11 +48,15 @@ export default function Progress({ loaderData: subjects }: Route.ComponentProps)
             <div className={styles.subjectList}>
               {subjects.map((subject) => {
                 const completed = subject.modules.filter((module) => module.status === "completed").length;
+                const subjectImage = getSubjectImage(subject.id);
+
                 return (
                   <article className={styles.subject} key={subject.id}>
                     <div className={styles.subjectHeading}>
                       <div>
-                        <span>{subject.code}</span>
+                        {subjectImage ? (
+                          <img src={subjectImage} alt="" aria-hidden="true" />
+                        ) : null}
                         <div>
                           <h3>{subject.title}</h3>
                           <p>{completed} из {subject.modules.length} модулей завершено</p>

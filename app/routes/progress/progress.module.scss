@@ -63,17 +63,11 @@
   gap: 16px;
 }
 
-.subjectHeading > div > span {
-  display: grid;
+.subjectHeading > div > img {
   width: 44px;
   height: 44px;
   flex: 0 0 auto;
-  place-items: center;
-  border-radius: 11px;
-  color: var(--color-action-primary);
-  background: var(--color-surface-subtle-blue);
-  font-size: 12px;
-  font-weight: 750;
+  object-fit: contain;
 }
 
 .subjectHeading h3 {

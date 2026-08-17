@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { Route } from "./+types/goals";
 import { AppShell } from "~/components/AppShell/AppShell";
 import { learningRepository } from "~/data/learning";
+import { getSubjectImage } from "~/data/subject-images";
 import type { TargetGrade } from "~/data/types";
 import { getCurrentUserId, useAuth } from "~/features/auth/AuthProvider";
 import { RequireAuth } from "~/features/auth/RequireAuth";
@@ -107,11 +108,14 @@ export default function Goals({ loaderData: { subjects, goals } }: Route.Compone
                 ? threshold === 0 ? 100 : Math.min(100, Math.round(score * 100 / threshold))
                 : 0;
               const achieved = target !== undefined && score !== null && score >= threshold;
+              const subjectImage = getSubjectImage(subject.id);
 
               return (
                 <article className={styles.goalCard} key={subject.id}>
                   <div className={styles.goalHeading}>
-                    <span>{subject.code}</span>
+                    {subjectImage ? (
+                      <img src={subjectImage} alt="" aria-hidden="true" />
+                    ) : null}
                     <div>
                       <h2>{subject.title}</h2>
                       <p>{score === null ? "Результатов пока нет" : `Текущий результат: ${score}%`}</p>

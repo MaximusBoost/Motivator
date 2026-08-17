@@ -10,24 +10,10 @@
 }
 
 .icon {
-  display: grid;
   width: 46px;
   height: 46px;
   margin-bottom: 20px;
-  place-items: center;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.blue {
-  color: var(--color-action-primary);
-  background: var(--color-surface-subtle-blue);
-}
-
-.olive {
-  color: var(--color-accent-secondary);
-  background: var(--color-surface-subtle-olive);
+  object-fit: contain;
 }
 
 .title {

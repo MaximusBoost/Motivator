@@ -1,4 +1,5 @@
 import type { ContinueLearning } from "~/data/types";
+import { getSubjectImage } from "~/data/subject-images";
 
 import { Button } from "../Button/Button";
 import { ProgressTrack } from "../ProgressTrack/ProgressTrack";
@@ -9,14 +10,26 @@ type ContinueCardProps = {
 };
 
 export function ContinueCard({ item }: ContinueCardProps) {
+  const subjectImage = getSubjectImage(item.subjectId);
+
   return (
     <article className={styles.card}>
-      <div className={styles.icon} aria-hidden="true">{item.subjectCode}</div>
+      {subjectImage ? (
+        <img
+          className={styles.icon}
+          src={subjectImage}
+          alt=""
+          aria-hidden="true"
+        />
+      ) : null}
 
       <div className={styles.content}>
         <div className={styles.heading}>
           <h3>{item.subjectTitle}</h3>
-          <p>Модуль {item.moduleNumber} из {item.modulesTotal} • {item.moduleTitle}</p>
+          <p>
+            Модуль {item.moduleNumber} из {item.modulesTotal} •{" "}
+            {item.moduleTitle}
+          </p>
         </div>
 
         <div className={styles.nextRow}>

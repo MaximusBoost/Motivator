@@ -80,17 +80,11 @@
   gap: 14px;
 }
 
-.goalHeading > span {
-  display: grid;
+.goalHeading > img {
   width: 46px;
   height: 46px;
   flex: 0 0 auto;
-  place-items: center;
-  border-radius: 12px;
-  color: var(--color-action-primary);
-  background: var(--color-surface-subtle-blue);
-  font-size: 12px;
-  font-weight: 750;
+  object-fit: contain;
 }
 
 .goalHeading h2 {
