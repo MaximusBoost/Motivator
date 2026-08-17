@@ -94,7 +94,7 @@ export default function Home({ loaderData: dashboard }: Route.ComponentProps) {
 
         <section className={styles.subjectsSection} aria-labelledby="featured-title">
           <div className={styles.sectionHeading}>
-            <h2 id="featured-title">Рекомендуемые предметы</h2>
+            <h2 className={styles.sectionHeadingH2} id="featured-title">Предметы</h2>
             <Button text="Все предметы" to="/subjects" variant="secondary" size="s" />
           </div>
 
