@@ -22,6 +22,12 @@ import {
   QUALIFICATION_POLICY_VERSION,
   reachesQualification,
 } from "~/data/qualification-policy";
+import {
+  curriculumSources,
+  sourceBasedCurriculum,
+  type CurriculumModule,
+  type SourceBasedSubjectId,
+} from "~/data/curriculum-content";
 import type { LearningRepository } from "./learning.repository";
 
 const optionTexts = [
@@ -31,87 +37,58 @@ const optionTexts = [
   "Ориентироваться только на скорость выполнения",
 ];
 
-const questionPrompts = [
-  "С чего следует начинать оценку новой ситуации?",
-  "Что необходимо определить после сбора исходных данных?",
-  "Как проверить выбранную последовательность действий?",
-  "Какой принцип должен быть приоритетным перед выполнением любых действий в новой ситуации?",
-  "Что важнее при выборе приоритета?",
-  "Когда следует переходить к практическому действию?",
-  "Для чего анализируются ограничения ситуации?",
-  "Каким должен быть обоснованный вывод?",
-  "Что помогает обнаружить слабые места решения?",
-  "Как выглядит правильная последовательность принятия решения?",
-];
-
-const medicalQuizQuestions: QuizQuestion[] = questionPrompts.map((prompt, index) => ({
-  id: `medical-m4-q${index + 1}`,
-  prompt,
-  instructions: "Выберите один вариант.",
-  hint:
-    index === 3
-      ? "Сопоставьте каждый вариант с условием вопроса. Не выбирайте ответ только потому, что он звучит наиболее решительно."
-      : "Сверьте вариант с алгоритмом: оценка, приоритет, действие, проверка.",
-  position: index + 1,
-  options: optionTexts.map((text, optionIndex) => ({
-    id: `medical-m4-q${index + 1}-o${optionIndex + 1}`,
-    label: String.fromCharCode(65 + optionIndex),
-    text,
-  })),
-}));
-
-const medicalQuiz: QuizActivity = {
-  id: "medical-m4-quiz",
-  moduleId: "medical-m4",
-  type: "quiz",
-  title: "Проверка знаний",
-  description: "Тест: первичная оценка состояния",
-  position: 2,
-  estimatedMinutes: 15,
-  questions: medicalQuizQuestions,
-};
-
-const medicalFreeAnswer: FreeAnswerActivity = {
-  id: "medical-m4-free-answer-1",
-  moduleId: "medical-m4",
-  type: "free_answer",
-  title: "Развернутый ответ",
-  description: "Задание 1 из 2",
-  position: 3,
-  estimatedMinutes: 20,
-  prompt: "Опишите, как вы будете оценивать ситуацию перед выбором дальнейшего действия.",
-  instructions:
-    "Ответьте своими словами. Важны логика, полнота и корректное использование понятий.",
-  maxLength: 2000,
-  criteria: [
-    { id: "criterion-completeness", title: "Полнота ответа", weightPercent: 40, position: 1 },
-    { id: "criterion-logic", title: "Логика изложения", weightPercent: 30, position: 2 },
-    { id: "criterion-terms", title: "Ключевые понятия", weightPercent: 30, position: 3 },
-  ],
-};
+const correctOptionByQuestionId = new Map<string, string>();
+const conceptsByFreeAnswerId = new Map<string, string[]>();
 
 function createGenericQuestions(activityId: string): QuizQuestion[] {
-  return [1, 2, 3].map((position) => ({
-    id: `${activityId}-q${position}`,
-    prompt:
-      position === 1
-        ? "Какой шаг алгоритма выполняется первым?"
-        : "Что необходимо сделать перед переходом к следующему этапу?",
-    instructions: "Выберите один вариант.",
-    hint: "Вспомните последовательность действий из теоретической части.",
-    position,
-    options: optionTexts.map((text, optionIndex) => ({
-      id: `${activityId}-q${position}-o${optionIndex + 1}`,
+  return [1, 2, 3].map((position) => {
+    const questionId = `${activityId}-q${position}`;
+    const options = optionTexts.map((text, optionIndex) => ({
+      id: `${questionId}-o${optionIndex + 1}`,
       label: String.fromCharCode(65 + optionIndex),
       text,
-    })),
-  }));
+    }));
+    correctOptionByQuestionId.set(questionId, options[0].id);
+    return {
+      id: questionId,
+      prompt:
+        position === 1
+          ? "Какой шаг алгоритма выполняется первым?"
+          : "Что необходимо сделать перед переходом к следующему этапу?",
+      instructions: "Выберите один вариант.",
+      hint: "Вспомните последовательность действий из теоретической части.",
+      position,
+      options,
+    };
+  });
 }
 
-function createActivities(moduleId: string): LearningActivity[] {
-  const quizId = `${moduleId}-quiz`;
+function createCurriculumQuestions(
+  activityId: string,
+  content: CurriculumModule,
+): QuizQuestion[] {
+  return content.questions.map((question, index) => {
+    const questionId = `${activityId}-q${index + 1}`;
+    const options = question.options.map((text, optionIndex) => ({
+      id: `${questionId}-o${optionIndex + 1}`,
+      label: String.fromCharCode(65 + optionIndex),
+      text,
+    }));
+    correctOptionByQuestionId.set(questionId, options[question.correctIndex].id);
+    return {
+      id: questionId,
+      prompt: question.prompt,
+      instructions: "Выберите один вариант.",
+      hint: question.hint,
+      position: index + 1,
+      options,
+    };
+  });
+}
 
-  return [
+function createActivities(moduleId: string, content?: CurriculumModule): LearningActivity[] {
+  const quizId = `${moduleId}-quiz`;
+  const activities: LearningActivity[] = [
     {
       id: `${moduleId}-theory`,
       moduleId,
@@ -125,13 +102,43 @@ function createActivities(moduleId: string): LearningActivity[] {
       id: quizId,
       moduleId,
       type: "quiz",
-      title: "Проверка знаний",
-      description: "Тест по материалам модуля",
+      title: content?.summary === "Итоговый тест" ? "Итоговая проверка" : "Проверка знаний",
+      description: content ? `Тест по теме «${content.title}»` : "Тест по материалам модуля",
       position: 2,
       estimatedMinutes: 15,
-      questions: createGenericQuestions(quizId),
+      questions: content
+        ? createCurriculumQuestions(quizId, content)
+        : createGenericQuestions(quizId),
     },
   ];
+
+  if (content?.freeAnswer) {
+    const activityId = `${moduleId}-free-answer`;
+    const concepts = [...new Set(
+      content.freeAnswer.criteria.flatMap((criterion) => criterion.requiredConcepts),
+    )];
+    conceptsByFreeAnswerId.set(activityId, concepts);
+    activities.push({
+      id: activityId,
+      moduleId,
+      type: "free_answer",
+      title: content.freeAnswer.title,
+      description: content.freeAnswer.description,
+      position: 3,
+      estimatedMinutes: 20,
+      prompt: content.freeAnswer.prompt,
+      instructions: content.freeAnswer.instructions,
+      maxLength: content.freeAnswer.maxLength,
+      criteria: content.freeAnswer.criteria.map((criterion, index) => ({
+        id: `${activityId}-criterion-${index + 1}`,
+        title: criterion.title,
+        weightPercent: criterion.weightPercent,
+        position: index + 1,
+      })),
+    });
+  }
+
+  return activities;
 }
 
 function createModule(
@@ -141,6 +148,7 @@ function createModule(
   status: ProgressStatus = "not_started",
   progressPercent = 0,
   summary = "Теория + тест",
+  content?: CurriculumModule,
 ): LearningModule {
   const id = `${subjectId}-m${number}`;
 
@@ -148,140 +156,42 @@ function createModule(
     id,
     subjectId,
     number,
-    title,
-    summary,
-    estimatedMinutes: 25,
-    objective: null,
-    keyPrinciple: null,
-    shortSummary: null,
-    learningTip: null,
-    sections: [],
-    activities: createActivities(id),
+    title: content?.title ?? title,
+    summary: content?.summary ?? summary,
+    estimatedMinutes: content?.estimatedMinutes ?? 25,
+    objective: content?.objective ?? null,
+    keyPrinciple: content?.keyPrinciple ?? null,
+    shortSummary: content?.shortSummary ?? null,
+    learningTip: content?.learningTip ?? null,
+    sections: content?.sections.map((section, index) => ({
+      id: `${id}-section-${index + 1}`,
+      title: section.title,
+      body: section.body,
+      position: index + 1,
+    })) ?? [],
+    sources: content?.sourceKeys.map((sourceKey) => {
+      const source = curriculumSources.find((item) => item.key === sourceKey);
+      if (!source) {
+        throw new Error(`Curriculum source ${sourceKey} is missing.`);
+      }
+      return {
+        id: source.key,
+        title: source.title,
+        kind: source.kind,
+        fileName: source.fileName,
+        uri: source.uri,
+        versionLabel: source.versionLabel,
+        verifiedAt: source.verifiedAt,
+        isCurrentVerified: source.isCurrentVerified,
+        notes: source.notes,
+        locator: content.sourceLocator,
+      };
+    }) ?? [],
+    activities: createActivities(id, content),
     status,
     progressPercent,
   };
 }
-
-function withFreeAnswer(module: LearningModule, prompt: string): LearningModule {
-  const activityId = `${module.id}-free-answer`;
-
-  return {
-    ...module,
-    activities: [
-      ...module.activities,
-      {
-        id: activityId,
-        moduleId: module.id,
-        type: "free_answer",
-        title: "Развернутый ответ",
-        description: "Практическое задание",
-        position: 3,
-        estimatedMinutes: 20,
-        prompt,
-        instructions:
-          "Ответьте своими словами. Важны логика, полнота и корректное использование понятий.",
-        maxLength: 2000,
-        criteria: [
-          {
-            id: `${activityId}-completeness`,
-            title: "Полнота ответа",
-            weightPercent: 40,
-            position: 1,
-          },
-          {
-            id: `${activityId}-logic`,
-            title: "Логика изложения",
-            weightPercent: 30,
-            position: 2,
-          },
-          {
-            id: `${activityId}-terms`,
-            title: "Ключевые понятия",
-            weightPercent: 30,
-            position: 3,
-          },
-        ],
-      },
-    ],
-  };
-}
-
-const medicalModules: LearningModule[] = [
-  createModule("medical", 1, "Основы предмета", "completed", 100),
-  createModule("medical", 2, "Безопасность и базовые алгоритмы", "completed", 100),
-  createModule("medical", 3, "Ключевые действия и последовательность", "completed", 100),
-  {
-    ...createModule(
-      "medical",
-      4,
-      "Оценка ситуации и принятие решений",
-      "in_progress",
-      58,
-      "Тест + свободный ответ",
-    ),
-    estimatedMinutes: 47,
-    objective:
-      "Научиться последовательно оценивать обстановку, выделять ключевые факторы и выбирать следующий шаг без потери контроля над ситуацией.",
-    keyPrinciple: "Сначала оценка условий и рисков, затем — действие по алгоритму.",
-    shortSummary: "Оценить → определить приоритет → выбрать действие → проверить решение.",
-    learningTip:
-      "После чтения ответьте на вопросы без возврата к тексту — это поможет точнее увидеть слабые места.",
-    sections: [
-      {
-        id: "medical-m4-section-1",
-        title: "1. Оцените исходные условия",
-        body: "Перед началом действий определите, что уже известно, какие ограничения есть у ситуации и какие данные необходимо уточнить. Не переходите к следующему этапу, пока не сформировано ясное понимание исходной обстановки.",
-        position: 1,
-      },
-      {
-        id: "medical-m4-section-2",
-        title: "2. Определите приоритет",
-        body: "Сопоставьте полученную информацию с задачей модуля. Приоритет должен определяться значимостью фактора, а не только скоростью выполнения действия.",
-        position: 2,
-      },
-      {
-        id: "medical-m4-section-3",
-        title: "3. Проверьте решение",
-        body: "Перед переходом к практической части убедитесь, что выбранная последовательность логична, не противоречит условиям и может быть объяснена своими словами.",
-        position: 3,
-      },
-    ],
-    activities: [
-      {
-        id: "medical-m4-theory",
-        moduleId: "medical-m4",
-        type: "theory",
-        title: "Теория",
-        description: "Теоретический материал",
-        position: 1,
-        estimatedMinutes: 12,
-      },
-      medicalQuiz,
-      medicalFreeAnswer,
-      {
-        ...medicalFreeAnswer,
-        id: "medical-m4-free-answer-2",
-        title: "Практический сценарий",
-        description: "Задание 2 из 2",
-        position: 4,
-        prompt: "Обоснуйте выбранную последовательность действий в изменившихся условиях.",
-      },
-    ],
-  },
-  withFreeAnswer(
-    createModule("medical", 5, "Практические сценарии"),
-    "Опишите порядок действий в предложенном практическом сценарии.",
-  ),
-  createModule("medical", 6, "Закрепление материала", "not_started", 0, "Тест"),
-  withFreeAnswer(
-    createModule("medical", 7, "Комплексные алгоритмы"),
-    "Составьте и обоснуйте комплексный алгоритм действий.",
-  ),
-  withFreeAnswer(
-    createModule("medical", 8, "Итоговая проверка", "not_started", 0, "Итоговый тест"),
-    "Подведите итог: какие факторы определяют выбор правильного действия?",
-  ),
-];
 
 function createSubject(
   id: string,
@@ -295,22 +205,28 @@ function createSubject(
   moduleNames: string[],
   lastScore: number | null = null,
 ): Subject {
+  const curriculum = id in sourceBasedCurriculum
+    ? sourceBasedCurriculum[id as SourceBasedSubjectId]
+    : null;
   const status: ProgressStatus =
     progressPercent === 0 ? "not_started" : progressPercent === 100 ? "completed" : "in_progress";
+  const moduleDefinitions = curriculum?.modules ?? moduleNames.map((title, index) => ({
+    number: index + 1,
+    title,
+  }));
 
   return {
     id,
     code,
     slug,
     title,
-    subtitle,
+    subtitle: curriculum?.subtitle ?? subtitle,
     theme,
     position,
-    estimatedMinutes: moduleNames.length * 25,
-    modules:
-      id === "medical"
-        ? medicalModules
-        : moduleNames.map((name, index) => {
+    estimatedMinutes: curriculum
+      ? curriculum.modules.reduce((sum, module) => sum + module.estimatedMinutes, 0)
+      : moduleNames.length * 25,
+    modules: moduleDefinitions.map((definition, index) => {
             const moduleProgress = Math.max(0, Math.min(100, progressPercent * 2 - index * 24));
             const moduleStatus: ProgressStatus =
               moduleProgress >= 100
@@ -318,7 +234,16 @@ function createSubject(
                 : moduleProgress > 0
                   ? "in_progress"
                   : "not_started";
-            return createModule(id, index + 1, name, moduleStatus, moduleProgress);
+            const content = curriculum?.modules[index];
+            return createModule(
+              id,
+              definition.number,
+              definition.title,
+              moduleStatus,
+              moduleProgress,
+              content?.summary,
+              content,
+            );
           }),
     status,
     progressPercent,
@@ -336,7 +261,7 @@ const subjects: Subject[] = [
     "blue",
     1,
     62,
-    medicalModules.map((module) => module.title),
+    sourceBasedCurriculum.medical.modules.map((module) => module.title),
     82,
   ),
   createSubject(
@@ -412,6 +337,15 @@ const subjects: Subject[] = [
   ),
 ];
 
+const medicalFreeAnswer = subjects
+  .find((subject) => subject.id === "medical")
+  ?.modules.flatMap((module) => module.activities)
+  .find((activity): activity is FreeAnswerActivity => activity.type === "free_answer");
+
+if (!medicalFreeAnswer) {
+  throw new Error("Source-based medical free-answer activity is missing.");
+}
+
 const results: AssessmentResult[] = [
   {
     id: "result-medical-free-answer-1",
@@ -422,17 +356,17 @@ const results: AssessmentResult[] = [
     summary:
       "Ответ раскрывает основную логику задания. Для более высокого результата не хватает детализации в двух ключевых пунктах.",
     submittedAnswer:
-      "Я сначала оцениваю исходные условия и ограничения, затем определяю наиболее значимый фактор и только после этого выбираю последовательность дальнейших действий.",
-    criterionScores: [
-      { criterionId: "criterion-completeness", title: "Полнота ответа", score: 85 },
-      { criterionId: "criterion-logic", title: "Логика изложения", score: 78 },
-      { criterionId: "criterion-terms", title: "Ключевые понятия", score: 82 },
-    ],
+      "Сначала оцениваю безопасность места, затем проверяю сознание и дыхание, организую вызов помощи, устраняю непосредственную угрозу жизни в пределах подготовки и продолжаю наблюдение до передачи специалистам.",
+    criterionScores: medicalFreeAnswer.criteria.map((criterion, index) => ({
+      criterionId: criterion.id,
+      title: criterion.title,
+      score: [88, 84, 80, 92][index] ?? 80,
+    })),
     aiFeedback: {
       strength: "Последовательность рассуждения понятна и не содержит резких переходов.",
       improvement:
-        "Добавьте явное объяснение, почему выбранный приоритет важнее альтернатив, и свяжите вывод с исходными условиями.",
-      recommendation: "Повторить раздел «Оценка исходных условий».",
+        "Добавьте, какие сведения необходимо передать медицинским специалистам и как контролировать изменение состояния.",
+      recommendation: "Повторить раздел «Приоритет и наблюдение».",
     },
     completedAt: "2026-08-14T14:30:00.000Z",
   },
@@ -699,8 +633,7 @@ export const mockLearningRepository: LearningRepository = {
     }
 
     const correctAnswers = activity.questions.filter((question) => {
-      const selectedOption = question.options.find((option) => option.id === answers[question.id]);
-      return selectedOption?.label === "A";
+      return answers[question.id] === correctOptionByQuestionId.get(question.id);
     }).length;
     const score = Math.round(correctAnswers * 100 / Math.max(1, activity.questions.length));
     const result: AssessmentResult = {
@@ -732,13 +665,30 @@ export const mockLearningRepository: LearningRepository = {
 
     const completeness = Math.min(100, Math.max(45, Math.round(normalized.length / 4)));
     const logic = Math.min(100, 55 + (normalized.includes("затем") ? 18 : 0) + (normalized.includes("после") ? 12 : 0));
-    const keywords = ["оцен", "услов", "риск", "приоритет", "действ", "проверк"];
-    const keywordScore = keywords.filter((keyword) => normalized.includes(keyword)).length;
-    const terms = Math.min(100, 45 + keywordScore * 9);
+    const concepts = conceptsByFreeAnswerId.get(activityId) ?? [
+      "оценка",
+      "условия",
+      "действия",
+      "контроль",
+    ];
+    const matchedConcepts = concepts.filter((concept) => concept
+      .toLocaleLowerCase("ru")
+      .split(/\s+/)
+      .filter((word) => word.length >= 5)
+      .some((word) => normalized.includes(word.slice(0, Math.min(7, word.length))))
+    ).length;
+    const terms = Math.min(
+      100,
+      40 + Math.round(matchedConcepts * 60 / Math.max(1, concepts.length)),
+    );
+    const boundaries = Math.min(100, 55 + (normalized.includes("если") ? 15 : 0) + (normalized.includes("уточ") ? 15 : 0));
     const scores = activity.criteria.map((criterion) => ({
       criterionId: criterion.id,
       title: criterion.title,
-      score: criterion.position === 1 ? completeness : criterion.position === 2 ? logic : terms,
+      score:
+        criterion.position === 1 ? completeness :
+        criterion.position === 2 ? logic :
+        criterion.position === 3 ? terms : boundaries,
     }));
     const score = Math.round(scores.reduce((total, item, index) => {
       const weight = activity.criteria[index]?.weightPercent ?? 0;
@@ -921,7 +871,7 @@ export const mockLearningRepository: LearningRepository = {
         throw new Error(`Ответьте на все вопросы предмета «${subject.subjectTitle}».`);
       }
       const correctAnswers = subject.questions.filter((question) =>
-        question.options.find((option) => option.id === answers[question.id])?.label === "A"
+        answers[question.id] === correctOptionByQuestionId.get(question.id)
       ).length;
       const scorePercent = Math.round(correctAnswers * 100 / subject.questions.length);
       return {

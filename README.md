@@ -7,6 +7,7 @@ and Supabase/PostgreSQL. It ships as a client-rendered SPA (CSR).
 
 - Node.js 22.12 or newer (Node 24 LTS is recommended for this project)
 - npm 10 or newer
+- Docker Desktop (only for the local Supabase stack)
 
 With nvm-windows, if Node needs to be installed or updated:
 
@@ -38,6 +39,28 @@ npm run preview
 ```
 
 The static browser build is generated in `build/client`.
+
+## Local Supabase
+
+The Supabase CLI is pinned as a project dev dependency, so no global CLI
+installation is needed. With Docker Desktop running:
+
+```powershell
+npm run supabase:start
+npm run supabase:reset
+npm run supabase:lint
+npm run smoke:supabase
+```
+
+`supabase:reset` targets only the local database and replays every migration
+followed by `supabase/seed.sql`. The smoke test creates two temporary users,
+checks Auth, seed data, RLS isolation and both grading RPCs, then removes those
+users. Stop the stack with `npm run supabase:stop`.
+
+For the browser app, take the local API URL and publishable key from
+`npm run supabase:status`, put them in `.env.local` as
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, then restart
+`npm run dev`. Never put the secret/service-role key in a `VITE_*` variable.
 
 ## Project structure
 
@@ -77,6 +100,14 @@ metrics, and an assessment result. To connect PostgreSQL, copy `.env.example`
 to `.env.local`, add the Supabase Project URL and publishable key, and apply the
 SQL migrations plus `supabase/seed.sql`. See
 [docs/data-layer.md](docs/data-layer.md).
+
+Four subjects now contain source-based MVP material: medical training, RHB
+protection, military topography, and military regulations (25 modules, 50
+theory sections, 75 questions, and 7 free-answer tasks). The other three
+subjects intentionally retain their placeholders. Edit
+`app/data/curriculum-content.ts`, then run `npm run content:seed`; do not edit
+the generated `supabase/seed.sql` by hand. Source mapping, version caveats, and
+review requirements are documented in [docs/curriculum.md](docs/curriculum.md).
 
 Apply migrations in filename order. The `202608170001_qualification_journey`
 migration adds the qualification profile, self-reported practice journal and a

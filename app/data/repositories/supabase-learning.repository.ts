@@ -25,6 +25,22 @@ import type { LearningRepository } from "./learning.repository";
 
 type Tables = Database["public"]["Tables"];
 type Row<TableName extends keyof Tables> = Tables[TableName]["Row"];
+type ReadableEvaluationCriterion = Pick<
+  Row<"evaluation_criteria">,
+  "id" | "activity_id" | "title" | "weight_percent" | "position"
+>;
+type ReadableContentSource = Pick<
+  Row<"content_sources">,
+  | "id"
+  | "title"
+  | "kind"
+  | "file_name"
+  | "uri"
+  | "version_label"
+  | "verified_at"
+  | "is_current_verified"
+  | "notes"
+>;
 
 type ContentRows = {
   subjects: Row<"subjects">[];
@@ -33,7 +49,9 @@ type ContentRows = {
   activities: Row<"learning_activities">[];
   questions: Row<"activity_questions">[];
   options: Row<"question_options">[];
-  criteria: Row<"evaluation_criteria">[];
+  criteria: ReadableEvaluationCriterion[];
+  sources: ReadableContentSource[];
+  moduleSources: Row<"module_content_sources">[];
 };
 
 type UserRows = {
@@ -132,7 +150,17 @@ function mapPhysicalTrainingAdvice(
 
 async function loadContent(): Promise<ContentRows> {
   const client = getSupabaseClient();
-  const [subjects, modules, sections, activities, questions, options, criteria] =
+  const [
+    subjects,
+    modules,
+    sections,
+    activities,
+    questions,
+    options,
+    criteria,
+    sources,
+    moduleSources,
+  ] =
     await Promise.all([
       client.from("subjects").select("*").order("position"),
       client.from("modules").select("*").order("position"),
@@ -140,7 +168,15 @@ async function loadContent(): Promise<ContentRows> {
       client.from("learning_activities").select("*").order("position"),
       client.from("activity_questions").select("*").order("position"),
       client.from("question_options").select("*").order("position"),
-      client.from("evaluation_criteria").select("*").order("position"),
+      client
+        .from("evaluation_criteria")
+        .select("id,activity_id,title,weight_percent,position")
+        .order("position"),
+      client
+        .from("content_sources")
+        .select("id,title,kind,file_name,uri,version_label,verified_at,is_current_verified,notes")
+        .order("title"),
+      client.from("module_content_sources").select("module_id,source_id,locator"),
     ]);
 
   return {
@@ -151,6 +187,8 @@ async function loadContent(): Promise<ContentRows> {
     questions: dataOrThrow("activity_questions", questions),
     options: dataOrThrow("question_options", options),
     criteria: dataOrThrow("evaluation_criteria", criteria),
+    sources: dataOrThrow("content_sources", sources),
+    moduleSources: dataOrThrow("module_content_sources", moduleSources),
   };
 }
 
@@ -188,7 +226,7 @@ function assembleSubjects(content: ContentRows, userRows: UserRows): Subject[] {
     questionsByActivity.set(question.activity_id, questions);
   }
 
-  const criteriaByActivity = new Map<string, Row<"evaluation_criteria">[]>();
+  const criteriaByActivity = new Map<string, ReadableEvaluationCriterion[]>();
   for (const criterion of content.criteria) {
     const criteria = criteriaByActivity.get(criterion.activity_id) ?? [];
     criteria.push(criterion);
@@ -200,6 +238,14 @@ function assembleSubjects(content: ContentRows, userRows: UserRows): Subject[] {
     const sections = sectionsByModule.get(section.module_id) ?? [];
     sections.push(section);
     sectionsByModule.set(section.module_id, sections);
+  }
+
+  const sourceById = new Map(content.sources.map((source) => [source.id, source] as const));
+  const sourcesByModule = new Map<string, Row<"module_content_sources">[]>();
+  for (const moduleSource of content.moduleSources) {
+    const moduleSources = sourcesByModule.get(moduleSource.module_id) ?? [];
+    moduleSources.push(moduleSource);
+    sourcesByModule.set(moduleSource.module_id, moduleSources);
   }
 
   const progressByActivity = new Map(
@@ -289,6 +335,23 @@ function assembleSubjects(content: ContentRows, userRows: UserRows): Subject[] {
         body: section.body,
         position: section.position,
       })),
+      sources: (sourcesByModule.get(module.id) ?? []).flatMap((moduleSource) => {
+        const source = sourceById.get(moduleSource.source_id);
+        return source
+          ? [{
+              id: source.id,
+              title: source.title,
+              kind: source.kind,
+              fileName: source.file_name,
+              uri: source.uri,
+              versionLabel: source.version_label,
+              verifiedAt: source.verified_at,
+              isCurrentVerified: source.is_current_verified,
+              notes: source.notes,
+              locator: moduleSource.locator,
+            }]
+          : [];
+      }),
       activities,
       status: getStatus(progressPercent),
       progressPercent,

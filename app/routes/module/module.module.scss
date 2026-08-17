@@ -107,6 +107,87 @@
   background: var(--color-surface-subtle-olive);
 }
 
+.sources {
+  margin-top: 34px;
+  padding-top: 28px;
+  border-top: 1px solid var(--color-border-default);
+}
+
+.sources h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.sourcesIntro {
+  margin: 10px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.sources ul {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sources li {
+  padding: 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 10px;
+}
+
+.sourceHeading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.sourceHeading a,
+.sourceHeading strong {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.sourceHeading a:hover {
+  color: var(--color-action-primary);
+}
+
+.sourceHeading span {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #fff1db;
+  color: #8a5411;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.sourceHeading span[data-current="true"] {
+  background: var(--color-surface-subtle-olive);
+  color: var(--color-accent-secondary);
+}
+
+.sources li > p {
+  margin: 10px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.sources small {
+  display: block;
+  margin-top: 8px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .shortSummary span {
   color: var(--color-accent-secondary);
 }
@@ -232,6 +313,10 @@
   .sections p,
   .placeholder p {
     font-size: 14px;
+  }
+
+  .sourceHeading {
+    flex-direction: column;
   }
 
   .aside {

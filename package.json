@@ -7,7 +7,16 @@
     "dev": "react-router dev",
     "preview": "vite preview --outDir build/client",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "check": "npm run typecheck && npm run build"
+    "check": "npm run content:check && npm run typecheck && npm run smoke:demo && npm run build",
+    "smoke:demo": "node scripts/smoke-demo.mjs",
+    "smoke:supabase": "node scripts/smoke-supabase.mjs",
+    "content:seed": "node scripts/generate-seed.mjs",
+    "content:check": "node scripts/generate-seed.mjs --check",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:reset": "supabase db reset --local",
+    "supabase:lint": "supabase db lint --local --level warning --fail-on error"
   },
   "dependencies": {
     "@react-router/node": "^8.3.0",
@@ -24,6 +33,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "sass": "^1.90.0",
+    "supabase": "2.114.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.0"
   },

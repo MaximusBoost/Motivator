@@ -290,14 +290,9 @@ activities[1]
   Это следующее задание из dashboard.continueLearning.nextActivityId.
 
 activities[2]
-  id: medical-m4-free-answer-1
+  id: medical-m4-free-answer
   type: free_answer
   title: Развернутый ответ
-
-activities[3]
-  id: medical-m4-free-answer-2
-  type: free_answer
-  title: Практический сценарий
 
 Чтобы получить следующее задание полностью:
 
@@ -363,7 +358,9 @@ quiz.estimatedMinutes
   Примерное время.
 
 quiz.questions
-  Массив вопросов. У текущего подробного теста 10 вопросов.
+  Массив вопросов. В каждом наполненном модуле сейчас 3 предметных вопроса.
+  Пробное квалификационное испытание отдельно собирает по 10 вопросов на
+  выбранный предмет из нескольких модулей.
 
 Поля вопроса:
 
@@ -389,7 +386,7 @@ option.text              — текст варианта.
 ------------------------------
 
 const task = await learningRepository.getFreeAnswer(
-  "medical-m4-free-answer-1",
+  "medical-m4-free-answer",
 );
 
 Поля:
@@ -398,15 +395,16 @@ task.title
 task.description
 task.prompt              — сам вопрос;
 task.instructions        — инструкция пользователю;
-task.maxLength           — максимум 2000 символов;
+task.maxLength           — максимум 2400 символов;
 task.estimatedMinutes
 task.criteria            — критерии будущей проверки.
 
 Критерии текущего задания:
 
-Полнота ответа       — 40%
-Логика изложения     — 30%
-Ключевые понятия     — 30%
+Полнота ответа                  — 30%
+Последовательность и логика     — 25%
+Соответствие учебному материалу — 35%
+Границы и безопасность ответа   — 10%
 
 Сохранение черновика в mock:
 
@@ -613,7 +611,7 @@ await learningRepository.getModule("medical-m4");
 await learningRepository.getQuiz("medical-m4-quiz");
 
 Свободный ответ:
-await learningRepository.getFreeAnswer("medical-m4-free-answer-1");
+await learningRepository.getFreeAnswer("medical-m4-free-answer");
 
 Результаты:
 await learningRepository.getResults();
@@ -753,3 +751,37 @@ supabase/functions/review-free-answer/index.ts
 supabase/functions/advise-physical-training/index.ts
 
 Её контракт и настройка описаны в docs/ai-review.md.
+
+
+18. УЧЕБНЫЙ КОНТЕНТ И ИСТОЧНИКИ (17.08.2026)
+------------------------------------------------
+
+Единый редактируемый источник:
+
+app/data/curriculum-content.ts
+
+В нём заполнены только четыре предмета:
+
+medical       — 8 модулей, 24 вопроса, 2 свободных ответа;
+rhb           — 5 модулей, 15 вопросов, 1 свободный ответ;
+topography    — 7 модулей, 21 вопрос, 2 свободных ответа;
+regulations   — 5 модулей, 15 вопросов, 2 свободных ответа.
+
+Огневая, тактическая и инженерная подготовка пока сохраняют прежние
+placeholder-данные.
+
+После изменения теории или вопроса:
+
+npm run content:seed
+npm run content:check
+
+supabase/seed.sql генерируется автоматически и вручную не редактируется.
+
+Источники хранятся в content_sources, связь с модулем — в
+module_content_sources. Пользователь видит название и вес критерия свободного
+ответа, но не видит закрытые required_concepts и free_answer_rubrics.
+Их загружает только Edge Function через service_role.
+
+Подробная карта источников, редакций и ограничений:
+
+docs/curriculum.md

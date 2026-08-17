@@ -26,6 +26,19 @@ export type TheorySection = {
   position: number;
 };
 
+export type LearningSource = {
+  id: Identifier;
+  title: string;
+  kind: "user_document" | "official_legal" | "official_guidance" | "training_manual";
+  fileName: string | null;
+  uri: string | null;
+  versionLabel: string;
+  verifiedAt: string | null;
+  isCurrentVerified: boolean;
+  notes: string;
+  locator: string;
+};
+
 export type AnswerOption = {
   id: Identifier;
   label: string;
@@ -88,6 +101,7 @@ export type LearningModule = {
   shortSummary: string | null;
   learningTip: string | null;
   sections: TheorySection[];
+  sources: LearningSource[];
   activities: LearningActivity[];
   status: ProgressStatus;
   progressPercent: number;

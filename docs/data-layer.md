@@ -12,7 +12,7 @@ const medical = await learningRepository.getSubjectBySlug("medical-training");
 const module = await learningRepository.getModule("medical-m4");
 const quiz = await learningRepository.getQuiz("medical-m4-quiz");
 const freeAnswer = await learningRepository.getFreeAnswer(
-  "medical-m4-free-answer-1",
+  "medical-m4-free-answer",
 );
 ```
 
@@ -45,10 +45,13 @@ export default function SubjectsPage({ loaderData }: Route.ComponentProps) {
 subjects
 └── modules
     ├── module_sections
+    ├── module_content_sources
+    │   └── content_sources
     └── learning_activities
         ├── activity_questions
         │   └── question_options
-        └── evaluation_criteria
+        ├── evaluation_criteria
+        └── free_answer_rubrics (только service_role)
 
 auth.users
 ├── profiles
@@ -75,33 +78,41 @@ union, поэтому после проверки `activity.type` редакто
 не ключи. Итоговый балл, проверку ответа и AI feedback позднее должен записывать
 доверенный сервер или Supabase Edge Function, а не клиентское приложение.
 
-## Данные из макета
+## Учебный контент
 
 В mock и seed добавлены:
 
 - 7 предметов и 42 модуля;
 - показатели дашборда, блок продолжения и план на сегодня;
-- подробный четвертый модуль медицинской подготовки;
-- 3 теоретических раздела, тест из 10 вопросов и 2 свободных ответа;
-- критерии оценки 40/30/30 и пример результата с баллом 82;
+- 25 наполненных модулей по медицине, РХБ-защите, топографии и уставам;
+- 50 теоретических разделов, 75 предметных вопросов и 7 свободных ответов;
+- закрытые опорные пункты и критерии AI-проверки;
 - статусы и проценты прогресса, необходимые карточкам каталога.
+
+Подробная карта источников и ограничения описаны в
+`docs/curriculum.md`.
 
 Экран «Прогресс» в переданном Figma-фрейме пока пустой, поэтому отдельные поля,
 которых нет в остальных экранах, для него не придумывались.
 
 ## Где менять пробные данные
 
-- `app/data/repositories/mock-learning.repository.ts` — текст и значения,
-  которые UI получает прямо сейчас без удаленной базы.
+- `app/data/curriculum-content.ts` — единый редактируемый источник теории,
+  вопросов, свободных ответов и метаданных источников для четырех наполненных
+  предметов.
+- `app/data/repositories/mock-learning.repository.ts` — сборка локального
+  состояния пользователя поверх единого учебного источника.
 - `app/data/types.ts` — контракт данных для компонентов.
 - `app/data/repositories/learning.repository.ts` — список доступных операций.
 - `app/data/repositories/supabase-learning.repository.ts` — преобразование строк
   PostgreSQL в тот же контракт.
 - `supabase/migrations` — структура и правила доступа PostgreSQL.
-- `supabase/seed.sql` — начальное содержимое удаленной/локальной базы.
+- `supabase/seed.sql` — сгенерированное начальное содержимое базы; вручную не
+  редактируется.
+- `scripts/generate-seed.mjs` — генератор seed из TypeScript-источника.
 
-Если меняется только текст карточки для верстки, сначала меняй mock. Если
-появляется новое поле, добавь его в типы, mock, SQL-схему, generated-типы базы и
+После изменения учебного материала выполни `npm run content:seed`. Если
+появляется новое поле, добавь его в типы, SQL-схему, generated-типы базы и
 Supabase-репозиторий.
 
 ## Подключение Supabase

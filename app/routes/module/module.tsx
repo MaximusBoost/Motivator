@@ -95,6 +95,35 @@ export default function Module({ loaderData: { module, subject } }: Route.Compon
                 </section>
               )}
 
+              {module.sources.length > 0 && (
+                <section className={styles.sources} aria-labelledby="module-sources-title">
+                  <h2 id="module-sources-title">Основа материала</h2>
+                  <p className={styles.sourcesIntro}>
+                    Сверяйте учебные положения с действующими документами и указаниями руководителя занятий.
+                  </p>
+                  <ul>
+                    {module.sources.map((source) => (
+                      <li key={source.id}>
+                        <div className={styles.sourceHeading}>
+                          {source.uri ? (
+                            <a href={source.uri} target="_blank" rel="noreferrer">
+                              {source.title}
+                            </a>
+                          ) : (
+                            <strong>{source.title}</strong>
+                          )}
+                          <span data-current={source.isCurrentVerified}>
+                            {source.isCurrentVerified ? "проверено" : "требует сверки"}
+                          </span>
+                        </div>
+                        <p>{source.versionLabel} · {source.locator}</p>
+                        <small>{source.notes}</small>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               <section className={styles.shortSummary}>
                 <span>Кратко</span>
                 <p>{module.shortSummary ?? "Изучить материал → проверить понимание → закрепить результат."}</p>

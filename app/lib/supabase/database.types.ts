@@ -22,6 +22,11 @@ type ServiceDirection =
   | "medical_support";
 type QualificationLevel = "none" | "third" | "second" | "first" | "master";
 type PracticeCategory = "professional" | "physical";
+type ContentSourceKind =
+  | "user_document"
+  | "official_legal"
+  | "official_guidance"
+  | "training_manual";
 
 type DbTable<Row, RequiredInsert extends keyof Row> = {
   Row: Row;
@@ -124,6 +129,35 @@ type EvaluationCriterionRow = {
   title: string;
   weight_percent: number;
   position: number;
+  guidance: string;
+  required_concepts: string[];
+};
+
+type ContentSourceRow = {
+  id: string;
+  source_key: string;
+  subject_id: string;
+  title: string;
+  kind: ContentSourceKind;
+  file_name: string | null;
+  uri: string | null;
+  version_label: string;
+  published_on: string | null;
+  verified_at: string | null;
+  is_current_verified: boolean;
+  notes: string;
+  created_at: string;
+};
+
+type ModuleContentSourceRow = {
+  module_id: string;
+  source_id: string;
+  locator: string;
+};
+
+type FreeAnswerRubricRow = {
+  activity_id: string;
+  reference_answer_points: string[];
 };
 
 type UserActivityProgressRow = {
@@ -298,6 +332,18 @@ export type Database = {
         EvaluationCriterionRow,
         "activity_id" | "title" | "weight_percent" | "position"
       >;
+      content_sources: DbTable<
+        ContentSourceRow,
+        "source_key" | "subject_id" | "title" | "kind" | "version_label"
+      >;
+      module_content_sources: DbTable<
+        ModuleContentSourceRow,
+        "module_id" | "source_id" | "locator"
+      >;
+      free_answer_rubrics: DbTable<
+        FreeAnswerRubricRow,
+        "activity_id" | "reference_answer_points"
+      >;
       user_activity_progress: DbTable<
         UserActivityProgressRow,
         "user_id" | "activity_id"
@@ -410,6 +456,7 @@ export type Database = {
       service_direction: ServiceDirection;
       qualification_level: QualificationLevel;
       practice_category: PracticeCategory;
+      content_source_kind: ContentSourceKind;
     };
     CompositeTypes: Record<string, never>;
   };
