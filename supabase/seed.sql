@@ -164,6 +164,56 @@ where question.activity_id in (
 )
   and option.label = 'A';
 
+-- Временный безопасный банк для проверки механики MVP. Это не утвержденные
+-- квалификационные вопросы: перед эксплуатацией их нужно заменить материалами,
+-- прошедшими предметную и правовую проверку. Три вопроса на модуль дают не менее
+-- 10 вопросов по каждому предмету для пробного режима.
+insert into public.activity_questions (
+  id, activity_id, prompt, instructions, hint, position
+)
+select gen_random_uuid(), activity.id,
+       format('Учебный вопрос %s по теме «%s»', question.position, module.title),
+       'Выберите действие, которое соответствует логике изученного материала.',
+       'Сначала вспомните цель и основные положения модуля.',
+       question.position
+from public.learning_activities activity
+join public.modules module on module.id = activity.module_id
+cross join lateral (values (1), (2), (3)) as question(position)
+where module.subject_id <> '10000000-0000-4000-8000-000000000001'
+  and activity.type = 'quiz';
+
+insert into public.question_options (id, question_id, label, text, position)
+select gen_random_uuid(), question.id, option.label, option.text, option.position
+from public.activity_questions question
+cross join lateral (
+  values
+    ('A', 'Сначала оценить условия, свериться с изученным порядком и только затем действовать', 1),
+    ('B', 'Пропустить оценку условий и сразу перейти к действию', 2),
+    ('C', 'Выбрать действие только по скорости выполнения', 3),
+    ('D', 'Не учитывать ограничения и цель задания', 4)
+) as option(label, text, position)
+where question.activity_id in (
+  select activity.id
+  from public.learning_activities activity
+  join public.modules module on module.id = activity.module_id
+  where module.subject_id <> '10000000-0000-4000-8000-000000000001'
+    and activity.type = 'quiz'
+);
+
+insert into public.question_answer_keys (question_id, correct_option_id, explanation)
+select question.id, option.id,
+       'Временный учебный ключ проверяет общую логику: оценка условий предшествует действию.'
+from public.activity_questions question
+join public.question_options option on option.question_id = question.id
+where question.activity_id in (
+  select activity.id
+  from public.learning_activities activity
+  join public.modules module on module.id = activity.module_id
+  where module.subject_id <> '10000000-0000-4000-8000-000000000001'
+    and activity.type = 'quiz'
+)
+  and option.label = 'A';
+
 insert into public.evaluation_criteria (id, activity_id, title, weight_percent, position)
 values
   ('61000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000003', 'Полнота ответа', 40, 1),

@@ -3,7 +3,11 @@ import type {
   FreeAnswerActivity,
   LearningActivity,
   LearningModule,
+  PracticeResult,
+  PhysicalTrainingAdvice,
   ProgressStatus,
+  QualificationExamResult,
+  QualificationProfile,
   QuizActivity,
   QuizQuestion,
   Subject,
@@ -11,6 +15,13 @@ import type {
   TargetGrade,
   TodayPlanItem,
 } from "~/data/types";
+import {
+  buildQualificationExamResult,
+  buildQualificationRoadmap,
+  gradeQualificationTest,
+  QUALIFICATION_POLICY_VERSION,
+  reachesQualification,
+} from "~/data/qualification-policy";
 import type { LearningRepository } from "./learning.repository";
 
 const optionTexts = [
@@ -80,7 +91,7 @@ const medicalFreeAnswer: FreeAnswerActivity = {
 };
 
 function createGenericQuestions(activityId: string): QuizQuestion[] {
-  return [1, 2].map((position) => ({
+  return [1, 2, 3].map((position) => ({
     id: `${activityId}-q${position}`,
     prompt:
       position === 1
@@ -463,6 +474,9 @@ type StoredMockState = {
   results: AssessmentResult[];
   todayPlanCompletion: Record<string, boolean>;
   goals: Record<string, TargetGrade>;
+  qualificationProfile: QualificationProfile | null;
+  qualificationExamResults: QualificationExamResult[];
+  practiceResults: PracticeResult[];
 };
 
 const emptyMockState: StoredMockState = {
@@ -470,6 +484,9 @@ const emptyMockState: StoredMockState = {
   results: [],
   todayPlanCompletion: {},
   goals: {},
+  qualificationProfile: null,
+  qualificationExamResults: [],
+  practiceResults: [],
 };
 
 function mockStateKey(userId: string) {
@@ -488,6 +505,9 @@ function readMockState(userId: string): StoredMockState {
       results: parsed.results ?? [],
       todayPlanCompletion: parsed.todayPlanCompletion ?? {},
       goals: parsed.goals ?? {},
+      qualificationProfile: parsed.qualificationProfile ?? null,
+      qualificationExamResults: parsed.qualificationExamResults ?? [],
+      practiceResults: parsed.practiceResults ?? [],
     };
   } catch {
     return clone(emptyMockState);
@@ -806,5 +826,201 @@ export const mockLearningRepository: LearningRepository = {
       answer,
       updatedAt: new Date().toISOString(),
     };
+  },
+
+  async getQualificationProfile(userId = "demo-user") {
+    return clone(readMockState(userId).qualificationProfile);
+  },
+
+  async saveQualificationProfile(input, userId = "demo-user") {
+    if (!input.isActiveServiceMember) {
+      throw new Error("Приложение предназначено только для действующих военнослужащих.");
+    }
+    if (input.serviceType === "conscript" && input.targetQualification === "master") {
+      throw new Error("Для службы по призыву цель «Мастер» не предусмотрена.");
+    }
+    if (
+      input.currentQualification !== input.targetQualification &&
+      reachesQualification(input.currentQualification, input.targetQualification)
+    ) {
+      throw new Error("Целевая классность не может быть ниже текущей.");
+    }
+    if (!input.serviceStartedAt) throw new Error("Укажите дату начала службы.");
+
+    const now = new Date().toISOString();
+    const profile: QualificationProfile = {
+      ...input,
+      userId,
+      policyVersion: QUALIFICATION_POLICY_VERSION,
+      onboardingCompletedAt: now,
+      activeServiceConfirmedAt: now,
+      updatedAt: now,
+    };
+    const state = readMockState(userId);
+    state.qualificationProfile = profile;
+    writeMockState(userId, state);
+    return clone(profile);
+  },
+
+  async getQualificationRoadmap(userId = "demo-user") {
+    const state = readMockState(userId);
+    return buildQualificationRoadmap({
+      profile: state.qualificationProfile,
+      subjects: subjectsForUser(userId),
+      practiceResults: state.practiceResults,
+      examResults: state.qualificationExamResults,
+    });
+  },
+
+  async createQualificationExam(subjectIds, userId = "demo-user") {
+    const uniqueSubjectIds = [...new Set(subjectIds)];
+    if (uniqueSubjectIds.length < 4) {
+      throw new Error("Для пробного испытания выберите не менее четырёх предметов.");
+    }
+    const state = readMockState(userId);
+    if (!state.qualificationProfile) {
+      throw new Error("Сначала настройте персональный маршрут.");
+    }
+
+    const examSubjects = uniqueSubjectIds.map((subjectId) => {
+      const subject = subjectsForUser(userId).find((item) => item.id === subjectId);
+      if (!subject) throw new Error("Один из выбранных предметов не найден.");
+      const questions = subject.modules
+        .flatMap((module) => module.activities)
+        .filter((activity): activity is QuizActivity => activity.type === "quiz")
+        .flatMap((activity) => activity.questions)
+        .slice(0, 10)
+        .map((question) => ({ ...question, hint: null }));
+      if (questions.length < 10) {
+        throw new Error(`Для предмета «${subject.title}» требуется не менее 10 тестовых вопросов.`);
+      }
+      return {
+        subjectId: subject.id,
+        subjectTitle: subject.title,
+        subjectTheme: subject.theme,
+        questions,
+      };
+    });
+
+    return {
+      policyVersion: QUALIFICATION_POLICY_VERSION,
+      targetQualification: state.qualificationProfile.targetQualification,
+      subjects: examSubjects,
+      questionsPerSubject: 10,
+      startedAt: new Date().toISOString(),
+    };
+  },
+
+  async submitQualificationExam(exam, answers, userId = "demo-user") {
+    const state = readMockState(userId);
+    const profile = state.qualificationProfile;
+    if (!profile) throw new Error("Сначала настройте персональный маршрут.");
+
+    const subjectResults = exam.subjects.map((subject) => {
+      if (subject.questions.some((question) => !answers[question.id])) {
+        throw new Error(`Ответьте на все вопросы предмета «${subject.subjectTitle}».`);
+      }
+      const correctAnswers = subject.questions.filter((question) =>
+        question.options.find((option) => option.id === answers[question.id])?.label === "A"
+      ).length;
+      const scorePercent = Math.round(correctAnswers * 100 / subject.questions.length);
+      return {
+        subjectId: subject.subjectId,
+        subjectTitle: subject.subjectTitle,
+        correctAnswers,
+        totalQuestions: subject.questions.length,
+        scorePercent,
+        grade: gradeQualificationTest(correctAnswers, subject.questions.length),
+      };
+    });
+    const physicalGrade = [...state.practiceResults]
+      .filter((result) => result.category === "physical")
+      .sort((left, right) => right.performedAt.localeCompare(left.performedAt))[0]?.grade ?? null;
+    const result = buildQualificationExamResult({
+      id: createResultId("qualification-exam"),
+      targetQualification: profile.targetQualification,
+      physicalGrade,
+      serviceType: profile.serviceType,
+      subjectResults,
+    });
+    state.qualificationExamResults = [result, ...state.qualificationExamResults];
+    writeMockState(userId, state);
+    return clone(result);
+  },
+
+  async getQualificationExamResult(attemptId, userId = "demo-user") {
+    return clone(
+      readMockState(userId).qualificationExamResults.find((result) => result.id === attemptId) ?? null,
+    );
+  },
+
+  async getPracticeResults(userId = "demo-user") {
+    return clone(
+      [...readMockState(userId).practiceResults].sort(
+        (left, right) => right.performedAt.localeCompare(left.performedAt),
+      ),
+    );
+  },
+
+  async getPhysicalTrainingAdvice(userId = "demo-user") {
+    const latest = [...readMockState(userId).practiceResults]
+      .filter((result) => result.category === "physical")
+      .sort((left, right) => right.performedAt.localeCompare(left.performedAt))[0];
+    if (!latest) return null;
+
+    const recommendations = latest.grade >= 4
+      ? [
+          "Сохраняйте регулярность и фиксируйте результат в одинаковых условиях.",
+          "Повышайте нагрузку постепенно, контролируя восстановление.",
+        ]
+      : [
+          "Разделите подготовку на короткие регулярные тренировки.",
+          "Сначала улучшайте технику выполнения, затем увеличивайте объём.",
+          "Повторите замер после восстановительного периода.",
+        ];
+    const advice: PhysicalTrainingAdvice = {
+      id: `demo-advice-${latest.id}`,
+      userId,
+      basedOnResultId: latest.id,
+      summary: `Демо-анализ результата «${latest.title}»: самостоятельная оценка ${latest.grade}.`,
+      recommendations,
+      caution: "Это общая учебная рекомендация, а не медицинское заключение или официальный план подготовки.",
+      source: "demo_algorithm",
+      generatedAt: latest.updatedAt,
+    };
+    return clone(advice);
+  },
+
+  async savePracticeResult(input, userId = "demo-user") {
+    if (!input.title.trim()) throw new Error("Укажите название норматива или упражнения.");
+    if (!Number.isFinite(input.value) || input.value < 0) {
+      throw new Error("Укажите корректный результат.");
+    }
+    const now = new Date().toISOString();
+    const result: PracticeResult = {
+      ...input,
+      title: input.title.trim(),
+      unit: input.unit.trim(),
+      notes: input.notes?.trim() || null,
+      id: createResultId("practice"),
+      userId,
+      source: "self_reported",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const state = readMockState(userId);
+    state.practiceResults = [result, ...state.practiceResults];
+    writeMockState(userId, state);
+    return clone(result);
+  },
+
+  async deletePracticeResult(resultId, userId = "demo-user") {
+    const state = readMockState(userId);
+    const nextResults = state.practiceResults.filter((result) => result.id !== resultId);
+    if (nextResults.length === state.practiceResults.length) {
+      throw new Error("Результат не найден.");
+    }
+    state.practiceResults = nextResults;
+    writeMockState(userId, state);
   },
 };

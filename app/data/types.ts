@@ -5,6 +5,19 @@ export type SubjectTheme = "blue" | "olive";
 export type ActivityType = "theory" | "quiz" | "free_answer";
 export type AttemptStatus = "draft" | "submitted" | "reviewing" | "completed";
 export type TargetGrade = 2 | 3 | 4 | 5;
+export type ServiceType = "contract" | "conscript";
+export type PersonnelCategory = "officer" | "warrant_officer" | "sergeant" | "soldier";
+export type PositionProfile = "leader" | "specialist" | "primary";
+export type ServiceDirection =
+  | "general"
+  | "command"
+  | "technical"
+  | "engineering"
+  | "communications"
+  | "logistics"
+  | "medical_support";
+export type QualificationLevel = "none" | "third" | "second" | "first" | "master";
+export type PracticeCategory = "professional" | "physical";
 
 export type TheorySection = {
   id: Identifier;
@@ -165,6 +178,131 @@ export type SubjectGoal = {
   subjectId: Identifier;
   targetGrade: TargetGrade;
   updatedAt: string;
+};
+
+export type QualificationProfileInput = {
+  isActiveServiceMember: boolean;
+  serviceType: ServiceType;
+  personnelCategory: PersonnelCategory;
+  positionProfile: PositionProfile;
+  hasSubordinates: boolean;
+  serviceDirection: ServiceDirection;
+  serviceStartedAt: string;
+  currentQualification: QualificationLevel;
+  qualificationAwardedAt: string | null;
+  qualificationExpiresAt: string | null;
+  targetQualification: Exclude<QualificationLevel, "none">;
+};
+
+export type QualificationProfile = QualificationProfileInput & {
+  userId: Identifier;
+  policyVersion: string;
+  onboardingCompletedAt: string;
+  activeServiceConfirmedAt: string;
+  updatedAt: string;
+};
+
+export type QualificationRequirementProgress = {
+  id: Identifier;
+  title: string;
+  description: string;
+  progressPercent: number;
+  status: "not_started" | "in_progress" | "ready" | "blocked";
+  href: string;
+};
+
+export type QualificationSubjectReadiness = {
+  subjectId: Identifier;
+  title: string;
+  progressPercent: number;
+  lastScore: number | null;
+  readinessPercent: number;
+  preparationPriority: "core" | "profile" | "additional";
+  priorityReason: string;
+};
+
+export type QualificationRoadmap = {
+  profile: QualificationProfile | null;
+  readinessPercent: number;
+  learningReadinessPercent: number;
+  practiceReadinessPercent: number;
+  examReadinessPercent: number;
+  physicalGrade: TargetGrade | null;
+  eligibleAt: string | null;
+  eligibilityLabel: string;
+  predictedQualification: QualificationLevel;
+  targetReached: boolean;
+  blockers: string[];
+  requirements: QualificationRequirementProgress[];
+  subjects: QualificationSubjectReadiness[];
+  latestExam: QualificationExamResult | null;
+};
+
+export type QualificationExamSubject = {
+  subjectId: Identifier;
+  subjectTitle: string;
+  subjectTheme: SubjectTheme;
+  questions: QuizQuestion[];
+};
+
+export type QualificationExam = {
+  policyVersion: string;
+  targetQualification: Exclude<QualificationLevel, "none">;
+  subjects: QualificationExamSubject[];
+  questionsPerSubject: number;
+  startedAt: string;
+};
+
+export type QualificationExamSubjectResult = {
+  subjectId: Identifier;
+  subjectTitle: string;
+  correctAnswers: number;
+  totalQuestions: number;
+  scorePercent: number;
+  grade: TargetGrade;
+};
+
+export type QualificationExamResult = {
+  id: Identifier;
+  targetQualification: Exclude<QualificationLevel, "none">;
+  predictedQualification: QualificationLevel;
+  qualifiesForTarget: boolean;
+  physicalGrade: TargetGrade | null;
+  averageScorePercent: number;
+  subjectResults: QualificationExamSubjectResult[];
+  blockers: string[];
+  policyVersion: string;
+  completedAt: string;
+};
+
+export type PracticeResultInput = {
+  category: PracticeCategory;
+  subjectId: Identifier | null;
+  title: string;
+  value: number;
+  unit: string;
+  grade: TargetGrade;
+  performedAt: string;
+  notes: string | null;
+};
+
+export type PracticeResult = PracticeResultInput & {
+  id: Identifier;
+  userId: Identifier;
+  source: "self_reported";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PhysicalTrainingAdvice = {
+  id: Identifier;
+  userId: Identifier;
+  basedOnResultId: Identifier;
+  summary: string;
+  recommendations: string[];
+  caution: string;
+  source: "ai" | "demo_algorithm";
+  generatedAt: string;
 };
 
 export type SubjectCardType = {

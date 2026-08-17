@@ -50,7 +50,7 @@ export default function Register() {
         password,
         username,
       });
-      navigate(result.requiresEmailConfirmation ? "/login?registered=1" : "/", { replace: true });
+      navigate(result.requiresEmailConfirmation ? "/login?registered=1" : "/onboarding", { replace: true });
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Не удалось создать аккаунт.");
     } finally {

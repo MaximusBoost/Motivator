@@ -32,6 +32,49 @@
   margin-bottom: 32px;
 }
 
+.routeSummary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 20px 22px;
+  border: 1px solid #cfdce7;
+  border-radius: 14px;
+  background: linear-gradient(110deg, #eaf1f6, #fff 72%);
+}
+
+.routeScore {
+  display: grid;
+  width: 86px;
+  height: 70px;
+  place-content: center;
+  border-right: 1px solid #cbd8e2;
+}
+
+.routeScore strong {
+  color: var(--color-action-primary);
+  font-size: 22px;
+}
+
+.routeScore span,
+.routeCopy > span {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+}
+
+.routeCopy h2 {
+  margin: 3px 0 5px;
+  font-size: 16px;
+}
+
+.routeCopy p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .dashboardGrid {
   display: grid;
   grid-template-columns: minmax(0, 744px) minmax(280px, 336px);
@@ -145,6 +188,17 @@
 
   .sectionHeading {
     align-items: flex-start;
+  }
+
+  .routeSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .routeScore {
+    width: auto;
+    height: auto;
+    place-content: start;
+    border-right: 0;
   }
 }
 

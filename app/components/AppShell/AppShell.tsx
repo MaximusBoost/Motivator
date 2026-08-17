@@ -13,10 +13,11 @@ type AppShellProps = {
 
 const navigation = [
   { to: "/", label: "Главная", end: true },
+  { to: "/qualification", label: "Мой маршрут", end: true },
   { to: "/subjects", label: "Предметы" },
+  { to: "/qualification/exam", label: "Пробное испытание" },
+  { to: "/practice", label: "Практика" },
   { to: "/results", label: "Результаты" },
-  { to: "/progress", label: "Прогресс" },
-  { to: "/goals", label: "Мои цели" },
   { to: "/profile", label: "Профиль" },
 ] as const;
 

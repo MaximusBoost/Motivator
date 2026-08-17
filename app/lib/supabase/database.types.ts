@@ -9,6 +9,19 @@ export type Json =
 type ProgressStatus = "not_started" | "in_progress" | "completed";
 type ActivityType = "theory" | "quiz" | "free_answer";
 type AttemptStatus = "draft" | "submitted" | "reviewing" | "completed";
+type ServiceType = "contract" | "conscript";
+type PersonnelCategory = "officer" | "warrant_officer" | "sergeant" | "soldier";
+type PositionProfile = "leader" | "specialist" | "primary";
+type ServiceDirection =
+  | "general"
+  | "command"
+  | "technical"
+  | "engineering"
+  | "communications"
+  | "logistics"
+  | "medical_support";
+type QualificationLevel = "none" | "third" | "second" | "first" | "master";
+type PracticeCategory = "professional" | "physical";
 
 type DbTable<Row, RequiredInsert extends keyof Row> = {
   Row: Row;
@@ -183,6 +196,81 @@ type UserSubjectGoalRow = {
   updated_at: string;
 };
 
+type UserQualificationProfileRow = {
+  user_id: string;
+  is_active_service_member: boolean;
+  active_service_confirmed_at: string;
+  service_type: ServiceType;
+  personnel_category: PersonnelCategory;
+  position_profile: PositionProfile;
+  has_subordinates: boolean;
+  service_direction: ServiceDirection;
+  service_started_at: string;
+  current_qualification: QualificationLevel;
+  qualification_awarded_at: string | null;
+  qualification_expires_at: string | null;
+  target_qualification: QualificationLevel;
+  policy_version: string;
+  onboarding_completed_at: string;
+  updated_at: string;
+};
+
+type UserPracticeResultRow = {
+  id: string;
+  user_id: string;
+  category: PracticeCategory;
+  subject_id: string | null;
+  title: string;
+  value: number;
+  unit: string;
+  grade: 2 | 3 | 4 | 5;
+  performed_at: string;
+  notes: string | null;
+  source: "self_reported";
+  created_at: string;
+  updated_at: string;
+};
+
+type QualificationExamAttemptRow = {
+  id: string;
+  user_id: string;
+  target_qualification: QualificationLevel;
+  predicted_qualification: QualificationLevel;
+  qualifies_for_target: boolean;
+  physical_grade: 2 | 3 | 4 | 5 | null;
+  average_score_percent: number;
+  policy_version: string;
+  started_at: string;
+  completed_at: string;
+};
+
+type QualificationExamSubjectResultRow = {
+  attempt_id: string;
+  subject_id: string;
+  correct_answers: number;
+  total_questions: number;
+  score_percent: number;
+  grade: 2 | 3 | 4 | 5;
+};
+
+type QualificationExamAnswerRow = {
+  attempt_id: string;
+  question_id: string;
+  selected_option_id: string;
+  is_correct: boolean;
+};
+
+type PhysicalTrainingAdviceRow = {
+  id: string;
+  user_id: string;
+  based_on_result_id: string;
+  summary: string;
+  recommendations: Json;
+  caution: string;
+  source: "ai";
+  generated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -235,6 +323,57 @@ export type Database = {
         UserSubjectGoalRow,
         "user_id" | "subject_id" | "target_grade"
       >;
+      user_qualification_profiles: DbTable<
+        UserQualificationProfileRow,
+        | "user_id"
+        | "is_active_service_member"
+        | "active_service_confirmed_at"
+        | "service_type"
+        | "personnel_category"
+        | "position_profile"
+        | "service_direction"
+        | "service_started_at"
+        | "target_qualification"
+        | "policy_version"
+      >;
+      user_practice_results: DbTable<
+        UserPracticeResultRow,
+        | "user_id"
+        | "category"
+        | "title"
+        | "value"
+        | "unit"
+        | "grade"
+        | "performed_at"
+      >;
+      physical_training_advice: DbTable<
+        PhysicalTrainingAdviceRow,
+        | "user_id"
+        | "based_on_result_id"
+        | "summary"
+        | "recommendations"
+        | "caution"
+      >;
+      qualification_exam_attempts: DbTable<
+        QualificationExamAttemptRow,
+        | "user_id"
+        | "target_qualification"
+        | "average_score_percent"
+        | "policy_version"
+        | "started_at"
+      >;
+      qualification_exam_subject_results: DbTable<
+        QualificationExamSubjectResultRow,
+        | "attempt_id"
+        | "subject_id"
+        | "correct_answers"
+        | "score_percent"
+        | "grade"
+      >;
+      qualification_exam_answers: DbTable<
+        QualificationExamAnswerRow,
+        "attempt_id" | "question_id" | "selected_option_id" | "is_correct"
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -250,11 +389,27 @@ export type Database = {
           total_questions: number;
         }[];
       };
+      submit_qualification_exam: {
+        Args: {
+          p_subject_ids: string[];
+          p_answers: Json;
+          p_started_at: string;
+        };
+        Returns: {
+          attempt_id: string;
+        }[];
+      };
     };
     Enums: {
       activity_type: ActivityType;
       progress_status: ProgressStatus;
       attempt_status: AttemptStatus;
+      service_type: ServiceType;
+      personnel_category: PersonnelCategory;
+      position_profile: PositionProfile;
+      service_direction: ServiceDirection;
+      qualification_level: QualificationLevel;
+      practice_category: PracticeCategory;
     };
     CompositeTypes: Record<string, never>;
   };

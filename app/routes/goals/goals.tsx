@@ -15,7 +15,7 @@ import styles from "./goals.module.scss";
 const scoreThresholds: Record<TargetGrade, number> = {
   2: 0,
   3: 60,
-  4: 75,
+  4: 80,
   5: 90,
 };
 
@@ -96,7 +96,7 @@ export default function Goals({ loaderData: { subjects, goals } }: Route.Compone
 
           <section className={styles.explanation}>
             <h2>Как считается достижение цели</h2>
-            <p>Оценка 5 — от 90%, 4 — от 75%, 3 — от 60%, 2 — результат ниже 60%. Порог можно будет сделать настраиваемым после MVP.</p>
+            <p>Для тренировочного теста из 10 вопросов: 5 — 9–10 верных ответов, 4 — 8, 3 — 6–7, 2 — 0–5. Эти предметные цели дополняют общую цель по классности.</p>
           </section>
 
           <section className={styles.grid} aria-label="Цели по предметам">

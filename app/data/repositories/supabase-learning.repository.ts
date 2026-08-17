@@ -4,11 +4,21 @@ import type {
   FreeAnswerActivity,
   LearningActivity,
   LearningModule,
+  PracticeResult,
+  PhysicalTrainingAdvice,
   ProgressStatus,
+  QualificationExamResult,
+  QualificationProfile,
   QuizActivity,
   Subject,
   TodayPlanItem,
 } from "~/data/types";
+import {
+  buildQualificationExamResult,
+  buildQualificationRoadmap,
+  QUALIFICATION_POLICY_VERSION,
+  reachesQualification,
+} from "~/data/qualification-policy";
 import { getSupabaseClient } from "~/lib/supabase/client";
 import type { Database } from "~/lib/supabase/database.types";
 import type { LearningRepository } from "./learning.repository";
@@ -55,6 +65,69 @@ function getStatus(progressPercent: number): ProgressStatus {
 function average(values: number[]): number {
   if (values.length === 0) return 0;
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function mapQualificationProfile(
+  row: Row<"user_qualification_profiles">,
+): QualificationProfile {
+  if (row.target_qualification === "none") {
+    throw new Error("В профиле не выбрана целевая классная квалификация.");
+  }
+
+  return {
+    userId: row.user_id,
+    isActiveServiceMember: row.is_active_service_member,
+    serviceType: row.service_type,
+    personnelCategory: row.personnel_category,
+    positionProfile: row.position_profile,
+    hasSubordinates: row.has_subordinates,
+    serviceDirection: row.service_direction,
+    serviceStartedAt: row.service_started_at,
+    currentQualification: row.current_qualification,
+    qualificationAwardedAt: row.qualification_awarded_at,
+    qualificationExpiresAt: row.qualification_expires_at,
+    targetQualification: row.target_qualification,
+    policyVersion: row.policy_version,
+    onboardingCompletedAt: row.onboarding_completed_at,
+    activeServiceConfirmedAt: row.active_service_confirmed_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapPracticeResult(row: Row<"user_practice_results">): PracticeResult {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    category: row.category,
+    subjectId: row.subject_id,
+    title: row.title,
+    value: Number(row.value),
+    unit: row.unit,
+    grade: row.grade,
+    performedAt: row.performed_at,
+    notes: row.notes,
+    source: row.source,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapPhysicalTrainingAdvice(
+  row: Row<"physical_training_advice">,
+): PhysicalTrainingAdvice {
+  const recommendations = Array.isArray(row.recommendations)
+    ? row.recommendations.filter((item): item is string => typeof item === "string")
+    : [];
+  return {
+    id: row.id,
+    userId: row.user_id,
+    basedOnResultId: row.based_on_result_id,
+    summary: row.summary,
+    recommendations,
+    caution: row.caution,
+    source: row.source,
+    generatedAt: row.generated_at,
+  };
 }
 
 async function loadContent(): Promise<ContentRows> {
@@ -372,6 +445,63 @@ async function getDashboard(userId?: string): Promise<DashboardData> {
   };
 }
 
+async function loadQualificationExamResult(
+  attemptId: string,
+  userId: string,
+): Promise<QualificationExamResult | null> {
+  const client = getSupabaseClient();
+  const attemptResult = await client
+    .from("qualification_exam_attempts")
+    .select("*")
+    .eq("id", attemptId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (attemptResult.error) {
+    throw new Error(`Не удалось загрузить пробное испытание: ${attemptResult.error.message}`);
+  }
+  const attempt = attemptResult.data;
+  if (!attempt) return null;
+  if (attempt.target_qualification === "none") {
+    throw new Error("В попытке отсутствует целевая классная квалификация.");
+  }
+
+  const [subjectRowsResult, subjects] = await Promise.all([
+    client
+      .from("qualification_exam_subject_results")
+      .select("*")
+      .eq("attempt_id", attempt.id),
+    getSubjects(userId),
+  ]);
+  const subjectRows = dataOrThrow(
+    "qualification_exam_subject_results",
+    subjectRowsResult,
+  );
+  const titleById = new Map(subjects.map((subject) => [subject.id, subject.title] as const));
+  const subjectResults = subjectRows.map((row) => ({
+    subjectId: row.subject_id,
+    subjectTitle: titleById.get(row.subject_id) ?? "Учебный предмет",
+    correctAnswers: row.correct_answers,
+    totalQuestions: row.total_questions,
+    scorePercent: row.score_percent,
+    grade: row.grade,
+  }));
+  const result = buildQualificationExamResult({
+    id: attempt.id,
+    targetQualification: attempt.target_qualification,
+    physicalGrade: attempt.physical_grade,
+    subjectResults,
+    completedAt: attempt.completed_at,
+  });
+
+  return {
+    ...result,
+    predictedQualification: attempt.predicted_qualification,
+    qualifiesForTarget: attempt.qualifies_for_target,
+    averageScorePercent: attempt.average_score_percent,
+    policyVersion: attempt.policy_version,
+  };
+}
+
 export const supabaseLearningRepository: LearningRepository = {
   getDashboard,
   getSubjects,
@@ -608,6 +738,10 @@ export const supabaseLearningRepository: LearningRepository = {
       throw new Error(`Не удалось обновить прогресс: ${progressUpdate.error.message}`);
     }
 
+    void client.functions
+      .invoke("review-free-answer", { body: { attemptId: attempt.id } })
+      .catch(() => undefined);
+
     return {
       id: attempt.id,
       activityId,
@@ -705,6 +839,222 @@ export const supabaseLearningRepository: LearningRepository = {
       targetGrade: row.target_grade,
       updatedAt: row.updated_at,
     };
+  },
+
+  async getQualificationProfile(userId) {
+    if (!userId) return null;
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_qualification_profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (result.error) {
+      throw new Error(`Не удалось загрузить персональный маршрут: ${result.error.message}`);
+    }
+    return result.data ? mapQualificationProfile(result.data) : null;
+  },
+
+  async saveQualificationProfile(input, userId) {
+    if (!userId) throw new Error("Для настройки маршрута необходимо войти.");
+    if (!input.isActiveServiceMember) {
+      throw new Error("Приложение предназначено только для действующих военнослужащих.");
+    }
+    if (input.serviceType === "conscript" && input.targetQualification === "master") {
+      throw new Error("Для службы по призыву цель «Мастер» не предусмотрена.");
+    }
+    if (
+      input.currentQualification !== input.targetQualification &&
+      reachesQualification(input.currentQualification, input.targetQualification)
+    ) {
+      throw new Error("Целевая классность не может быть ниже текущей.");
+    }
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_qualification_profiles")
+      .upsert(
+        {
+          user_id: userId,
+          is_active_service_member: true,
+          active_service_confirmed_at: new Date().toISOString(),
+          service_type: input.serviceType,
+          personnel_category: input.personnelCategory,
+          position_profile: input.positionProfile,
+          has_subordinates: input.hasSubordinates,
+          service_direction: input.serviceDirection,
+          service_started_at: input.serviceStartedAt,
+          current_qualification: input.currentQualification,
+          qualification_awarded_at: input.qualificationAwardedAt,
+          qualification_expires_at: input.qualificationExpiresAt,
+          target_qualification: input.targetQualification,
+          policy_version: QUALIFICATION_POLICY_VERSION,
+        },
+        { onConflict: "user_id" },
+      )
+      .select("*")
+      .single();
+    return mapQualificationProfile(dataOrThrow("user_qualification_profiles", result));
+  },
+
+  async getQualificationRoadmap(userId) {
+    const [profile, subjects, practiceResults] = await Promise.all([
+      this.getQualificationProfile(userId),
+      getSubjects(userId),
+      this.getPracticeResults(userId),
+    ]);
+    let latestExam: QualificationExamResult | null = null;
+
+    if (userId) {
+      const client = getSupabaseClient();
+      const attemptResult = await client
+        .from("qualification_exam_attempts")
+        .select("id")
+        .eq("user_id", userId)
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (attemptResult.error) {
+        throw new Error(`Не удалось загрузить историю испытаний: ${attemptResult.error.message}`);
+      }
+      if (attemptResult.data) {
+        latestExam = await loadQualificationExamResult(attemptResult.data.id, userId);
+      }
+    }
+
+    return buildQualificationRoadmap({
+      profile,
+      subjects,
+      practiceResults,
+      examResults: latestExam ? [latestExam] : [],
+    });
+  },
+
+  async createQualificationExam(subjectIds, userId) {
+    const uniqueSubjectIds = [...new Set(subjectIds)];
+    if (uniqueSubjectIds.length < 4) {
+      throw new Error("Для пробного испытания выберите не менее четырёх предметов.");
+    }
+    const [profile, subjects] = await Promise.all([
+      this.getQualificationProfile(userId),
+      getSubjects(userId),
+    ]);
+    if (!profile) throw new Error("Сначала настройте персональный маршрут.");
+
+    const examSubjects = uniqueSubjectIds.map((subjectId) => {
+      const subject = subjects.find((item) => item.id === subjectId);
+      if (!subject) throw new Error("Один из выбранных предметов не найден.");
+      const questions = subject.modules
+        .flatMap((module) => module.activities)
+        .filter((activity): activity is QuizActivity => activity.type === "quiz")
+        .flatMap((activity) => activity.questions)
+        .slice(0, 10)
+        .map((question) => ({ ...question, hint: null }));
+      if (questions.length < 10) {
+        throw new Error(`Для предмета «${subject.title}» требуется не менее 10 тестовых вопросов.`);
+      }
+      return {
+        subjectId: subject.id,
+        subjectTitle: subject.title,
+        subjectTheme: subject.theme,
+        questions,
+      };
+    });
+
+    return {
+      policyVersion: QUALIFICATION_POLICY_VERSION,
+      targetQualification: profile.targetQualification,
+      subjects: examSubjects,
+      questionsPerSubject: 10,
+      startedAt: new Date().toISOString(),
+    };
+  },
+
+  async submitQualificationExam(exam, answers, userId) {
+    if (!userId) throw new Error("Для отправки испытания необходимо войти.");
+    const client = getSupabaseClient();
+    const result = await client.rpc("submit_qualification_exam", {
+      p_subject_ids: exam.subjects.map((subject) => subject.subjectId),
+      p_answers: answers,
+      p_started_at: exam.startedAt,
+    });
+    const rows = dataOrThrow("submit_qualification_exam", result);
+    const attempt = rows[0];
+    if (!attempt) throw new Error("Сервер не вернул результат пробного испытания.");
+    const examResult = await loadQualificationExamResult(attempt.attempt_id, userId);
+    if (!examResult) throw new Error("Не удалось загрузить результат пробного испытания.");
+    return examResult;
+  },
+
+  async getQualificationExamResult(attemptId, userId) {
+    if (!userId) return null;
+    return loadQualificationExamResult(attemptId, userId);
+  },
+
+  async getPracticeResults(userId) {
+    if (!userId) return [];
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_practice_results")
+      .select("*")
+      .eq("user_id", userId)
+      .order("performed_at", { ascending: false });
+    return dataOrThrow("user_practice_results", result).map(mapPracticeResult);
+  },
+
+  async getPhysicalTrainingAdvice(userId) {
+    if (!userId) return null;
+    const client = getSupabaseClient();
+    const result = await client
+      .from("physical_training_advice")
+      .select("*")
+      .eq("user_id", userId)
+      .order("generated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (result.error) {
+      throw new Error(`Не удалось загрузить рекомендацию по физподготовке: ${result.error.message}`);
+    }
+    return result.data ? mapPhysicalTrainingAdvice(result.data) : null;
+  },
+
+  async savePracticeResult(input, userId) {
+    if (!userId) throw new Error("Для сохранения результата необходимо войти.");
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_practice_results")
+      .insert({
+        user_id: userId,
+        category: input.category,
+        subject_id: input.subjectId,
+        title: input.title.trim(),
+        value: input.value,
+        unit: input.unit.trim(),
+        grade: input.grade,
+        performed_at: input.performedAt,
+        notes: input.notes?.trim() || null,
+      })
+      .select("*")
+      .single();
+    const savedResult = mapPracticeResult(dataOrThrow("user_practice_results", result));
+    if (savedResult.category === "physical") {
+      void client.functions
+        .invoke("advise-physical-training", { body: { resultId: savedResult.id } })
+        .catch(() => undefined);
+    }
+    return savedResult;
+  },
+
+  async deletePracticeResult(resultId, userId) {
+    if (!userId) throw new Error("Для удаления результата необходимо войти.");
+    const client = getSupabaseClient();
+    const result = await client
+      .from("user_practice_results")
+      .delete()
+      .eq("id", resultId)
+      .eq("user_id", userId);
+    if (result.error) {
+      throw new Error(`Не удалось удалить результат: ${result.error.message}`);
+    }
   },
 
   async saveFreeAnswerDraft(activityId, answer, userId) {

@@ -4,6 +4,14 @@ import type {
   FreeAnswerActivity,
   FreeAnswerDraft,
   LearningModule,
+  PracticeResult,
+  PracticeResultInput,
+  PhysicalTrainingAdvice,
+  QualificationExam,
+  QualificationExamResult,
+  QualificationProfile,
+  QualificationProfileInput,
+  QualificationRoadmap,
   QuizActivity,
   Subject,
   SubjectGoal,
@@ -48,4 +56,24 @@ export interface LearningRepository {
     answer: string,
     userId?: string,
   ): Promise<FreeAnswerDraft>;
+  getQualificationProfile(userId?: string): Promise<QualificationProfile | null>;
+  saveQualificationProfile(
+    input: QualificationProfileInput,
+    userId?: string,
+  ): Promise<QualificationProfile>;
+  getQualificationRoadmap(userId?: string): Promise<QualificationRoadmap>;
+  createQualificationExam(subjectIds: string[], userId?: string): Promise<QualificationExam>;
+  submitQualificationExam(
+    exam: QualificationExam,
+    answers: Record<string, string>,
+    userId?: string,
+  ): Promise<QualificationExamResult>;
+  getQualificationExamResult(
+    attemptId: string,
+    userId?: string,
+  ): Promise<QualificationExamResult | null>;
+  getPracticeResults(userId?: string): Promise<PracticeResult[]>;
+  getPhysicalTrainingAdvice(userId?: string): Promise<PhysicalTrainingAdvice | null>;
+  savePracticeResult(input: PracticeResultInput, userId?: string): Promise<PracticeResult>;
+  deletePracticeResult(resultId: string, userId?: string): Promise<void>;
 }

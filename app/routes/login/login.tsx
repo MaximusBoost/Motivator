@@ -43,7 +43,7 @@ export default function Login() {
 
   async function handleDemo() {
     await continueAsDemo();
-    navigate(next, { replace: true });
+    navigate(next === "/" ? "/onboarding" : next, { replace: true });
   }
 
   return (

@@ -4,6 +4,7 @@
     "**/*.tsx",
     ".react-router/types/**/*"
   ],
+  "exclude": ["supabase/functions/**/*"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2023"],
     "types": ["node", "vite/client"],

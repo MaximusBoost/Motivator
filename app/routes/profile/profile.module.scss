@@ -72,6 +72,33 @@
   margin-top: 24px;
 }
 
+.qualificationCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 24px;
+  padding: 22px 24px;
+  border: 1px solid #cddbe6;
+  border-radius: 14px;
+  background: var(--color-surface-subtle-blue);
+}
+
+.qualificationCard span,
+.qualificationCard p {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.qualificationCard h2 {
+  margin: 5px 0;
+  font-size: 17px;
+}
+
+.qualificationCard p {
+  margin: 0;
+}
+
 .settingsGrid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr);
@@ -177,6 +204,11 @@
 
   .stats {
     grid-template-columns: 1fr;
+  }
+
+  .qualificationCard {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .settingsCard dl div {

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import type { Route } from "./+types/profile";
 import { AppShell } from "~/components/AppShell/AppShell";
 import { learningRepository } from "~/data/learning";
+import { qualificationLabels, serviceDirectionLabels } from "~/data/qualification-policy";
 import { getCurrentUserId, useAuth } from "~/features/auth/AuthProvider";
 import { RequireAuth } from "~/features/auth/RequireAuth";
 import { Button } from "~/secondApp/components/Button/Button";
@@ -17,14 +18,15 @@ export function meta({}: Route.MetaArgs) {
 
 export async function clientLoader() {
   const userId = await getCurrentUserId();
-  const [dashboard, goals] = await Promise.all([
+  const [dashboard, goals, roadmap] = await Promise.all([
     learningRepository.getDashboard(userId),
     learningRepository.getGoals(userId),
+    learningRepository.getQualificationRoadmap(userId),
   ]);
-  return { dashboard, goals };
+  return { dashboard, goals, roadmap };
 }
 
-export default function Profile({ loaderData: { dashboard, goals } }: Route.ComponentProps) {
+export default function Profile({ loaderData: { dashboard, goals, roadmap } }: Route.ComponentProps) {
   const { user, signOut, isDemoMode } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState("");
@@ -68,6 +70,27 @@ export default function Profile({ loaderData: { dashboard, goals } }: Route.Comp
             <StatCard value={`${dashboard.stats.averageScore}%`} label="Средний результат" />
             <StatCard value={dashboard.stats.quizzesCompleted} label="Тестов пройдено" />
             <StatCard value={goals.length} label="Целей установлено" />
+          </section>
+
+          <section className={styles.qualificationCard}>
+            <div>
+              <span>Служебный профиль для учебного маршрута</span>
+              <h2>
+                {roadmap.profile
+                  ? qualificationLabels[roadmap.profile.targetQualification]
+                  : "Цель по классности не выбрана"}
+              </h2>
+              <p>
+                {roadmap.profile
+                  ? `${serviceDirectionLabels[roadmap.profile.serviceDirection]} · готовность ${roadmap.readinessPercent}%`
+                  : "Укажите только обобщённые сведения — без подразделения, ВУС и точной должности."}
+              </p>
+            </div>
+            <Button
+              text={roadmap.profile ? "Изменить маршрут" : "Настроить маршрут"}
+              to="/onboarding"
+              variant="secondary"
+            />
           </section>
 
           <div className={styles.settingsGrid}>

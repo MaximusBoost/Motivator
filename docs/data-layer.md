@@ -52,6 +52,12 @@ subjects
 
 auth.users
 ├── profiles
+├── user_qualification_profiles
+├── user_practice_results
+│   └── physical_training_advice
+├── qualification_exam_attempts
+│   ├── qualification_exam_subject_results
+│   └── qualification_exam_answers
 ├── user_activity_progress
 ├── activity_attempts
 │   ├── quiz_answers
@@ -117,5 +123,25 @@ const results = await learningRepository.getResults(user.id);
 await learningRepository.saveFreeAnswerDraft(activityId, answer, user.id);
 ```
 
+Персональный маршрут использует тот же репозиторий:
+
+```ts
+const profile = await learningRepository.getQualificationProfile(user.id);
+const roadmap = await learningRepository.getQualificationRoadmap(user.id);
+const exam = await learningRepository.createQualificationExam(subjectIds, user.id);
+const practice = await learningRepository.getPracticeResults(user.id);
+const advice = await learningRepository.getPhysicalTrainingAdvice(user.id);
+```
+
+`QualificationRoadmap` — вычисляемое представление. В отдельной таблице оно не
+хранится: репозиторий собирает его из профиля, учебного прогресса, последнего
+пробного испытания и самостоятельно внесённых результатов. Поэтому изменение
+источника данных не требует переписывать компоненты.
+
 `service_role` key никогда не помещается во фронтенд или в переменную с
 префиксом `VITE_`. Пользовательский доступ ограничивается Row Level Security.
+
+Служебный профиль намеренно обобщён. В базе MVP не должно быть номера части,
+точной должности, ВУС, места службы и материалов ограниченного распространения.
+Создание маршрута требует подтверждения статуса действующего военнослужащего;
+дата подтверждения хранится в `active_service_confirmed_at`.

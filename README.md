@@ -63,7 +63,10 @@ Implemented MVP routes:
 - `/subjects`, `/subjects/:subjectSlug` — catalog and subject modules;
 - `/modules/:moduleId`, `/activities/:activityId` — theory, quizzes and free answers;
 - `/results`, `/results/:attemptId` — assessment history and details;
-- `/progress`, `/goals`, `/profile` — progress, target grades and account.
+- `/onboarding`, `/qualification` — qualification goal and personal route;
+- `/qualification/exam`, `/qualification/exam/results/:attemptId` — mock qualification exam;
+- `/practice` — self-reported professional and physical results;
+- `/progress`, `/goals`, `/profile` — progress, subject grades and account.
 
 ## Data
 
@@ -75,11 +78,23 @@ to `.env.local`, add the Supabase Project URL and publishable key, and apply the
 SQL migrations plus `supabase/seed.sql`. See
 [docs/data-layer.md](docs/data-layer.md).
 
-Apply migrations in filename order. The 2026-08-16 migrations add unique
-usernames, trusted quiz scoring and per-subject target grades. Quiz answer keys
-remain inaccessible to the browser; scoring runs inside the `submit_quiz`
-PostgreSQL function. Free answers are stored with `submitted` status until a
-server/Edge Function performs AI evaluation.
+Apply migrations in filename order. The `202608170001_qualification_journey`
+migration adds the qualification profile, self-reported practice journal and a
+trusted `submit_qualification_exam` RPC. Quiz answer keys remain inaccessible
+to the browser; both ordinary and qualification tests are scored in PostgreSQL.
+
+Free answers are stored with `submitted` status and can be reviewed by
+`supabase/functions/review-free-answer`; physical results can trigger
+`supabase/functions/advise-physical-training`. Both functions use server-only
+`AI_PROVIDER_URL` and `AI_PROVIDER_API_KEY` secrets; see
+[docs/ai-review.md](docs/ai-review.md). The current qualification result is a
+training forecast, not an official assessment or award.
+
+The product scope is limited to active service members. Onboarding requires an
+explicit confirmation and stores only a generalized service profile. Do not
+store unit numbers, exact positions, VUS, locations, or restricted material.
+The subject ordering derived from the generalized profile is an application
+recommendation only; it is not an official curriculum or commission list.
 
 ## Rendering strategy
 

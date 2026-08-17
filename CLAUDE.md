@@ -31,5 +31,10 @@
 - The Supabase publishable key is intentionally public; the service-role key is
   a secret and must never be placed in frontend code or a `VITE_` variable.
 - Change the database through new migration files in `supabase/migrations`.
+- Do not add exact unit, position, VUS, location, classified, or service-limited data.
+- Qualification values are preparation forecasts. Never present them as an official
+  commission decision, admission, assessment, or award.
+- Instructor, commander, commission, and official-record workflows are outside the
+  approved MVP scope until the application is formally approved.
 - Add route metadata and an error state for every new public route.
 - Run `npm run check` before considering a task complete.

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { Route } from "./+types/home";
 import { AppShell } from "~/components/AppShell/AppShell";
 import { learningRepository } from "~/data/learning";
+import { qualificationLabels } from "~/data/qualification-policy";
 import type { TodayPlanItem } from "~/data/types";
 import { getCurrentUserId } from "~/features/auth/AuthProvider";
 import { useAuth } from "~/features/auth/AuthProvider";
@@ -23,10 +24,15 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function clientLoader() {
-  return learningRepository.getDashboard(await getCurrentUserId());
+  const userId = await getCurrentUserId();
+  const [dashboard, roadmap] = await Promise.all([
+    learningRepository.getDashboard(userId),
+    learningRepository.getQualificationRoadmap(userId),
+  ]);
+  return { dashboard, roadmap };
 }
 
-export default function Home({ loaderData: dashboard }: Route.ComponentProps) {
+export default function Home({ loaderData: { dashboard, roadmap } }: Route.ComponentProps) {
   const { user } = useAuth();
   const [todayPlan, setTodayPlan] = useState<TodayPlanItem[]>(dashboard.todayPlan);
   const [planError, setPlanError] = useState("");
@@ -61,9 +67,36 @@ export default function Home({ loaderData: dashboard }: Route.ComponentProps) {
       <AppShell>
         <main className={styles.page}>
         <header className={styles.header}>
-          <h1>Добро пожаловать</h1>
-          <p>Продолжайте обучение и следите за своим прогрессом.</p>
+          <h1>Добро пожаловать{user?.username ? `, ${user.username}` : ""}</h1>
+          <p>Продолжайте подготовку по своему персональному маршруту.</p>
         </header>
+
+        <section className={styles.routeSummary} aria-labelledby="route-summary-title">
+          {roadmap.profile ? (
+            <>
+              <div className={styles.routeScore}>
+                <strong>{roadmap.readinessPercent}%</strong>
+                <span>общая готовность</span>
+              </div>
+              <div className={styles.routeCopy}>
+                <span>Целевая классность</span>
+                <h2 id="route-summary-title">{qualificationLabels[roadmap.profile.targetQualification]}</h2>
+                <p>{roadmap.blockers[0] ?? "Базовые этапы маршрута выполнены. Поддерживайте форму."}</p>
+              </div>
+              <Button text="Открыть маршрут" to="/qualification" variant="secondary" />
+            </>
+          ) : (
+            <>
+              <div className={styles.routeScore}><strong>01</strong><span>первый шаг</span></div>
+              <div className={styles.routeCopy}>
+                <span>Персональный маршрут</span>
+                <h2 id="route-summary-title">Выберите цель по классности</h2>
+                <p>Укажите обобщённый профиль службы — без номера части, должности и ВУС.</p>
+              </div>
+              <Button text="Настроить маршрут" to="/onboarding" />
+            </>
+          )}
+        </section>
 
         <section className={styles.stats} aria-label="Статистика обучения">
           {stats.map((stat) => <StatCard key={stat.label} {...stat} />)}

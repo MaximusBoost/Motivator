@@ -654,3 +654,102 @@ motivator:learning:<userId>. Оно нужно только для разраб�
 AI-комментарий появятся после подключения серверной Edge Function. Локальный
 mock показывает только явно подписанную предварительную алгоритмическую оценку,
 чтобы не выдавать ее за настоящий AI-анализ.
+
+
+17. ПЕРСОНАЛЬНЫЙ МАРШРУТ К КЛАССНОСТИ (17.08.2026)
+--------------------------------------------------
+
+Служебный профиль и цель:
+
+const profile = await learningRepository.getQualificationProfile(userId);
+
+await learningRepository.saveQualificationProfile({
+  isActiveServiceMember: true,
+  serviceType: "contract",
+  personnelCategory: "soldier",
+  positionProfile: "specialist",
+  hasSubordinates: false,
+  serviceDirection: "general",
+  serviceStartedAt: "2025-08-17",
+  currentQualification: "none",
+  qualificationAwardedAt: null,
+  qualificationExpiresAt: null,
+  targetQualification: "third",
+}, userId);
+
+Готовый объект для dashboard и страницы «Мой маршрут»:
+
+const roadmap = await learningRepository.getQualificationRoadmap(userId);
+
+roadmap.profile                    — служебный профиль или null;
+roadmap.readinessPercent          — общая учебная готовность 0–100;
+roadmap.learningReadinessPercent  — теория и обычные тесты;
+roadmap.practiceReadinessPercent  — внесённая практика;
+roadmap.examReadinessPercent      — последнее пробное испытание;
+roadmap.physicalGrade             — последняя самостоятельная оценка физподготовки;
+roadmap.predictedQualification    — предварительный прогноз;
+roadmap.blockers                  — что мешает цели;
+roadmap.requirements              — карточки этапов с href и прогрессом;
+roadmap.subjects                  — готовность по каждому предмету.
+
+У roadmap.subjects есть preparationPriority: "core", "profile" или
+"additional". Это только учебная сортировка приложения: базовое ядро + акцент
+по обобщённому направлению. Она не заменяет перечень предметов, определённый
+уполномоченным должностным лицом.
+
+Пробное испытание:
+
+const exam = await learningRepository.createQualificationExam(
+  [subjectId1, subjectId2, subjectId3, subjectId4],
+  userId,
+);
+
+В exam по 10 вопросов на выбранный предмет, подсказки удалены. После заполнения
+объекта answers, где ключ — question.id, значение — option.id:
+
+const result = await learningRepository.submitQualificationExam(
+  exam,
+  answers,
+  userId,
+);
+
+В Supabase правильные ответы проверяет submit_qualification_exam(...), а не
+браузер. result.predictedQualification — только тренировочный прогноз.
+
+Практика и физподготовка:
+
+const results = await learningRepository.getPracticeResults(userId);
+
+await learningRepository.savePracticeResult({
+  category: "physical",       // либо "professional"
+  subjectId: null,
+  title: "Бег 3 км",
+  value: 12.4,
+  unit: "мин",
+  grade: 4,
+  performedAt: "2026-08-17",
+  notes: null,
+}, userId);
+
+Все такие результаты имеют source: "self_reported". Они не являются
+официальной ведомостью. В MVP не хранятся номер части, ВУС, точная должность,
+место службы и сведения ограниченного распространения.
+
+Новые страницы:
+
+/onboarding                              — выбор профиля и цели;
+/qualification                           — персональный маршрут;
+/qualification/exam                      — пробное испытание;
+/qualification/exam/results/:attemptId   — предварительный результат;
+/practice                                — журнал практики и физподготовки.
+
+SQL-таблицы находятся в миграции:
+supabase/migrations/202608170001_qualification_journey.sql
+
+Серверная AI-проверка свободных ответов:
+supabase/functions/review-free-answer/index.ts
+
+Серверный AI-совет по самостоятельно внесённой физподготовке:
+supabase/functions/advise-physical-training/index.ts
+
+Её контракт и настройка описаны в docs/ai-review.md.
