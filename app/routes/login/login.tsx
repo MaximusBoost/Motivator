@@ -53,9 +53,12 @@ export default function Login() {
       footer={<>Нет аккаунта? <Link to="/register">Зарегистрироваться</Link></>}
     >
       {isDemoMode && (
-        <p className={styles.modeNotice}>
+        <div>
+
+        {/* <p className={styles.modeNotice}>
           Supabase пока не настроен — данные входа сохраняются только в этом браузере.
-        </p>
+        </p> */}
+        </div>
       )}
 
       {searchParams.has("registered") && (

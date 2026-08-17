@@ -481,9 +481,25 @@ function progressStatus(progressPercent: number): ProgressStatus {
   return "not_started";
 }
 
+function zeroSubjectsProgress(userSubjects: Subject[]) {
+  for (const subject of userSubjects) {
+    subject.progressPercent = 0;
+    subject.status = "not_started";
+    subject.lastScore = null;
+    for (const module of subject.modules) {
+      module.progressPercent = 0;
+      module.status = "not_started";
+    }
+  }
+}
+
 function subjectsForUser(userId?: string): Subject[] {
   const userSubjects = clone(subjects);
   if (!userId) return userSubjects;
+
+  if (userId !== "demo-user") {
+    zeroSubjectsProgress(userSubjects);
+  }
 
   const state = readMockState(userId);
   for (const subject of userSubjects) {
@@ -650,7 +666,8 @@ export const mockLearningRepository: LearningRepository = {
       } : null,
       todayPlan: mockTodayPlan.map((item) => ({
         ...item,
-        isCompleted: state.todayPlanCompletion[item.id] ?? item.isCompleted,
+        isCompleted: state.todayPlanCompletion[item.id] ??
+          (userId === "demo-user" ? item.isCompleted : false),
       })),
       featuredSubjects: featuredSubjects.length > 0 ? featuredSubjects : userSubjects.slice(0, 3),
     });

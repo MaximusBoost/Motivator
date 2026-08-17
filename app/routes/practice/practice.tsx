@@ -466,9 +466,9 @@ export default function Practice({
             </div>
           </div>
 
-          <aside className={styles.disclaimer}>
+          {/* <aside className={styles.disclaimer}>
             Баллы и предварительный уровень — учебный самоконтроль. Официальный результат определяется на проверке по назначенному контрольному комплексу. Не указывайте подразделение, ВУС и место выполнения.
-          </aside>
+          </aside> */}
         </main>
       </AppShell>
     </RequireAuth>

@@ -294,7 +294,7 @@ export default function Onboarding({ loaderData: profile }: Route.ComponentProps
                 required
               />
               <span>
-                Подтверждаю, что являюсь действующим военнослужащим и использую приложение
+                Подтверждаю, что использую приложение
                 только для личной учебной подготовки.
               </span>
             </label>
